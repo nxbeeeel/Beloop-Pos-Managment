@@ -255,7 +255,7 @@ export default function POSPage() {
                                     </div>
                                 </Link>
                                 <div className="h-px bg-gray-100 my-2" />
-                                <Link href="#" onClick={() => setIsSidebarOpen(false)}>
+                                <Link href="/settings" onClick={() => setIsSidebarOpen(false)}>
                                     <div className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-colors">
                                         <Settings size={20} />
                                         Settings
