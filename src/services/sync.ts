@@ -115,7 +115,13 @@ export const SyncService = {
             throw new Error(`Failed to fetch from ${url}. Status: ${response.status}. Msg: ${errorText}`);
         }
         const json = await response.json();
-        return json.result.data; // { data: products, outlet: ... }
+
+        // Handle SuperJSON structure
+        if (json.result?.data?.json) {
+            return json.result.data.json;
+        }
+
+        return json.result?.data; // Fallback or standard JSON
     },
 
     async checkLoyalty(phoneNumber: string, saasContext: { tenantId: string; outletId: string }) {
