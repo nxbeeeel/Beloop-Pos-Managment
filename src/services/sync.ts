@@ -112,7 +112,7 @@ export const SyncService = {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Failed to fetch products:', errorText);
-            throw new Error('Failed to fetch products');
+            throw new Error(`Failed to fetch from ${url}. Status: ${response.status}. Msg: ${errorText}`);
         }
         const json = await response.json();
         return json.result.data; // { data: products, outlet: ... }
