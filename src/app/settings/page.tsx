@@ -1,8 +1,6 @@
 'use client';
 
 import { usePOSStore } from '@/lib/store';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 
 export default function SettingsPage() {
     const { tenantId, outletId, outlet } = usePOSStore();
@@ -16,33 +14,33 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>System Information</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                    <div className="border rounded-lg shadow-sm">
+                        <div className="p-6 border-b">
+                            <h3 className="text-lg font-semibold leading-none tracking-tight">System Information</h3>
+                        </div>
+                        <div className="p-6 space-y-4">
                             <div className="grid gap-2">
-                                <Label>Connected Tenant ID</Label>
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Connected Tenant ID</label>
                                 <div className="p-3 bg-gray-100 rounded-md font-mono text-sm break-all">
                                     {tenantId || 'Not Configured'}
                                 </div>
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Connected Outlet ID</Label>
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Connected Outlet ID</label>
                                 <div className="p-3 bg-gray-100 rounded-md font-mono text-sm break-all">
                                     {outletId || 'Not Configured'}
                                 </div>
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Outlet Name (From API)</Label>
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Outlet Name (From API)</label>
                                 <div className="p-3 bg-gray-100 rounded-md text-sm">
                                     {outlet?.name || 'Loading or Not Connected...'}
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
                     <div className="text-xs text-gray-400">
                         <p>Version: 1.0.0</p>
