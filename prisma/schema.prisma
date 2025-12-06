@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- SaaS Core Models (Mapped to Tracker) ---
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  settings  Json?    // Global config synced from Tracker
+  outlets   Outlet[]
+  categories Category[]
+  menuItems  MenuItem[]
+  createdAt DateTime @default(now())
+}
+
+model Outlet {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String   // e.g., "DXB-01"
+  address     String?
+  timezone    String   @default("UTC")
+  settings    Json?    // Local overrides
+  isPosEnabled Boolean @default(false)
+  
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  users       PosUser[]
+  orders      Order[]
+  inventory   InventoryItem[]
+  stockMovements StockMovement[]
+  
+  // Transfers
+  outgoingTransfers InterBranchTransfer[] @relation("SourceOutlet")
+  incomingTransfers InterBranchTransfer[] @relation("TargetOutlet")
+  
+  // Franchise Specific
+  royalties   Royalty[]
+
+  createdAt   DateTime @default(now())
+}
+
+// --- POS Users & Auth (Clerk Integration) ---
+
+enum UserRole {
+  HQ_ADMIN
+  BRANCH_MANAGER
+  CASHIER
+  KITCHEN
+}
+
+model PosUser {
+  id        String   @id @default(cuid())
+  clerkId   String?  @unique // Link to Clerk User
+  tenantId  String?
+  outletId  String?
+  
+  username  String   @unique // Fallback for PIN login
+  pinCode   String?  // Encrypted PIN for quick access
+  role      UserRole @default(CASHIER)
+  
+  outlet    Outlet?  @relation(fields: [outletId], references: [id])
+  orders    Order[]
+  
+  createdAt DateTime @default(now())
+}
+
+// --- Menu & Products ---
+
+model Category {
+  id        String     @id @default(cuid())
+  tenantId  String     // Link to Tenant (Brand)
+  name      String
+  sortOrder Int        @default(0)
+  items     MenuItem[]
+  
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  @@index([tenantId])
+}
+
+model MenuItem {
+  id          String      @id @default(cuid())
+  tenantId    String      // Link to Tenant (Brand)
+  categoryId  String
+  name        String
+  price       Decimal     @db.Decimal(10, 2)
+  description String?
+  imageUrl    String?
+  sku         String?     // Link to global Product SKU
+  isAvailable Boolean     @default(true)
+  
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  
+  @@index([tenantId])
+}
+
+// --- Orders & Sales ---
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  outletId    String
+  posUserId   String
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(10, 2)
+  taxAmount   Decimal     @db.Decimal(10, 2) @default(0)
+  discountAmount Decimal  @db.Decimal(10, 2) @default(0)
+  notes       String?
+  
+  synced      Boolean     @default(false) // Sync status with Beloop Backend
+  syncedAt    DateTime?
+
+  outlet      Outlet      @relation(fields: [outletId], references: [id])
+  user        PosUser     @relation(fields: [posUserId], references: [id])
+  items       OrderItem[]
+  
+  createdAt   DateTime    @default(now())
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  price      Decimal  @db.Decimal(10, 2)
+  modifiers  Json?    // Selected options/modifiers
+  
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id])
+}
+
+// --- Inventory & Transfers ---
+
+model InventoryItem {
+  id        String   @id @default(cuid())
+  outletId  String
+  sku       String
+  qoh       Int      @default(0) // Quantity on Hand
+  reorderLevel Int   @default(10)
+  
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+  
+  @@unique([outletId, sku])
+}
+
+enum StockMovementType {
+  SALE
+  WASTE
+  RECEIPT
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  outletId  String
+  sku       String
+  type      StockMovementType
+  quantity  Int      // Positive or Negative
+  referenceId String? // OrderID, TransferID, etc.
+  
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+enum TransferStatus {
+  REQUESTED
+  APPROVED
+  SHIPPED
+  RECEIVED
+  REJECTED
+}
+
+model InterBranchTransfer {
+  id              String   @id @default(cuid())
+  sourceOutletId  String
+  targetOutletId  String
+  status          TransferStatus @default(REQUESTED)
+  items           Json     // Array of { sku, quantity }
+  
+  sourceOutlet    Outlet   @relation("SourceOutlet", fields: [sourceOutletId], references: [id])
+  targetOutlet    Outlet   @relation("TargetOutlet", fields: [targetOutletId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// --- Franchise Management ---
+
+enum RoyaltyStatus {
+  DRAFT
+  INVOICED
+  PAID
+}
+
+model Royalty {
+  id            String   @id @default(cuid())
+  outletId      String
+  periodStart   DateTime
+  periodEnd     DateTime
+  grossSales    Decimal  @db.Decimal(10, 2)
+  royaltyAmount Decimal  @db.Decimal(10, 2)
+  status        RoyaltyStatus @default(DRAFT)
+  
+  outlet        Outlet   @relation(fields: [outletId], references: [id])
+  createdAt     DateTime @default(now())
+}

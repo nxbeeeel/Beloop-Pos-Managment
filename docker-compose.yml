@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: beloop_pos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  pos-app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://user:password@postgres:5432/beloop_pos
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
