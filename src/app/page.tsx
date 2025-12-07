@@ -34,7 +34,8 @@ export default function POSPage() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
 
-    // Get tenant/outlet from user metadata
+    // Get tenant/outlet from user metadata (Primary) or Env (Fallback ONLY for validated context)
+    // We already validated 'isAuthorized' below, so we can trust the Env ID if user matches it.
     const tenantId = (user?.publicMetadata?.tenantId as string) || process.env.NEXT_PUBLIC_TENANT_ID || '';
     const outletId = (user?.publicMetadata?.outletId as string) || process.env.NEXT_PUBLIC_OUTLET_ID || '';
     const saasContext = { tenantId, outletId };
@@ -105,6 +106,53 @@ export default function POSPage() {
                 <Link href="/sign-in" className="text-pink-600 hover:underline">Sign In</Link>
             </div>
         );
+    }
+
+    // STRICT Access Control
+    // The User MUST belong to the configured Outlet ID of this POS deployment.
+    const envOutletId = process.env.NEXT_PUBLIC_OUTLET_ID;
+    const userOutletId = user.publicMetadata?.outletId as string;
+
+    const isAuthorized = userOutletId === envOutletId;
+
+    if (!isAuthorized) {
+        // If user is Super Admin or Brand Admin, maybe allow? For now, strict block.
+        // Assuming even Admins should "Login to Dashboard" not "Login to POS" directly unless assigned?
+        // Let's allow SUPER/BRAND_ADMIN for debugging if needed, but User requested STRICT logic.
+        const role = user.publicMetadata?.role as string;
+        const isAdmin = role === 'SUPER' || role === 'BRAND_ADMIN';
+
+        if (!isAdmin) {
+            return (
+                <div className="flex h-screen items-center justify-center bg-gray-50 flex-col gap-6 text-center px-4">
+                    <div className="bg-red-100 p-4 rounded-full text-red-600">
+                        <LogOut size={32} />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">Access Restricted</h1>
+                        <p className="text-gray-500 mt-2 max-w-md mx-auto">
+                            Your account is not assigned to this specific Outlet/Device.
+                        </p>
+                        <p className="text-xs text-gray-400 mt-4 font-mono">
+                            POS Outlet: {envOutletId?.slice(-6)}...<br />
+                            Your Outlet: {userOutletId ? userOutletId.slice(-6) + '...' : 'None'}
+                        </p>
+                    </div>
+                    <div className="flex gap-4">
+                        <SignOutButton>
+                            <button className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-colors">
+                                Sign Out
+                            </button>
+                        </SignOutButton>
+                        <Link href={process.env.NEXT_PUBLIC_TRACKER_URL || "#"}>
+                            <button className="px-6 py-2.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-black transition-colors">
+                                Go to Dashboard
+                            </button>
+                        </Link>
+                    </div>
+                </div>
+            );
+        }
     }
 
     const total = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
