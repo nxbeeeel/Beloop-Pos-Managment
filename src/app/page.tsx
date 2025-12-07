@@ -110,7 +110,7 @@ export default function POSPage() {
     const total = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
 
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
+        <div className="flex h-[100dvh] bg-gray-50 overflow-hidden font-sans">
             {/* Left Side: Menu */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
                 {/* Header */}
@@ -297,11 +297,11 @@ export default function POSPage() {
                             onClick={() => setIsCartOpen(false)}
                         />
                         <motion.div
-                            initial={{ x: '100%' }}
-                            animate={{ x: 0 }}
-                            exit={{ x: '100%' }}
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="absolute right-0 top-0 bottom-0 w-[90%] max-w-[400px] bg-white shadow-2xl flex flex-col"
+                            className="absolute bottom-0 left-0 right-0 h-[85dvh] bg-white shadow-2xl flex flex-col rounded-t-2xl overflow-hidden"
                         >
                             <div className="flex justify-between items-center p-4 border-b bg-gray-50/50">
                                 <h2 className="font-bold text-lg text-gray-900">Current Order</h2>

@@ -83,8 +83,8 @@ export const CartContent = () => {
             </div>
 
             {/* Footer / Totals */}
-            <div className="p-5 bg-white border-t border-gray-100 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] z-20">
-                <div className="space-y-3 mb-6">
+            <div className="p-4 sm:p-5 bg-white border-t border-gray-100 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] z-20 pb-safe">
+                <div className="space-y-3 mb-4 sm:mb-6">
                     <div className="flex justify-between text-gray-500 text-sm">
                         <span>Subtotal</span>
                         <span className="font-medium text-gray-900">₹{subtotal.toFixed(2)}</span>
@@ -152,7 +152,7 @@ export const CartContent = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr,2fr] gap-3">
+                <div className="grid grid-cols-[1fr,2fr] gap-3 mb-2 sm:mb-0">
                     <button
                         onClick={() => document.dispatchEvent(new CustomEvent('open-loyalty'))}
                         className="py-3.5 px-4 bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-bold hover:bg-rose-100 hover:border-rose-200 transition-all flex items-center justify-center gap-2 active:scale-95"
