@@ -1,5 +1,6 @@
 import { usePOSStore } from '@/lib/store';
 import { get, set, del, keys } from 'idb-keyval';
+import { getPosToken, isTokenExpiringSoon, refreshPosToken, getAuthHeaders } from './pos-auth';
 
 export interface QueuedMutation {
     id: string;
@@ -34,6 +35,11 @@ export const SyncService = {
     async processQueue() {
         if (!navigator.onLine) return;
 
+        // Check if token needs refresh before processing
+        if (isTokenExpiringSoon()) {
+            await refreshPosToken();
+        }
+
         const queue = (await get<QueuedMutation[]>(QUEUE_KEY)) || [];
         if (queue.length === 0) return;
 
@@ -59,19 +65,28 @@ export const SyncService = {
 
         console.log(`[POS SyncService] Sending mutation: ${mutation.type}`, mutation.payload);
 
+        // ✅ SECURITY FIX: Use signed token instead of raw headers
+        const headers = getAuthHeaders();
+
+        if (!headers['Authorization']) {
+            throw new Error('No POS authentication token - please log in again');
+        }
+
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-tenant-id': usePOSStore.getState().tenantId || '',
-                'x-outlet-id': usePOSStore.getState().outletId || '',
-            },
+            headers,
             body: JSON.stringify({ json: mutation.payload }),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`[POS SyncService] Failed to sync: ${response.status} ${response.statusText}`, errorText);
+
+            // If unauthorized, token may have expired
+            if (response.status === 401) {
+                throw new Error('Session expired - please log in again');
+            }
+
             throw new Error(`Failed to sync: ${response.statusText}`);
         }
 
@@ -81,8 +96,6 @@ export const SyncService = {
             console.log(`[POS SyncService] Sync success:`, result);
         } catch (e) {
             console.error(`[POS SyncService] Failed to parse response JSON`, e);
-            const text = await response.text();
-            console.log(`[POS SyncService] Raw response:`, text);
             throw new Error('Invalid JSON response from server');
         }
         return result;
@@ -100,18 +113,23 @@ export const SyncService = {
 
     async pullProducts(saasContext: { tenantId: string; outletId: string }) {
         const url = `${process.env.NEXT_PUBLIC_TRACKER_URL}/api/trpc/pos.getProducts?input={}`;
+
+        // ✅ SECURITY FIX: Use signed token instead of raw headers
+        const headers = getAuthHeaders();
+
         const response = await fetch(url, {
             method: 'GET',
-            headers: {
-                'x-tenant-id': saasContext.tenantId,
-                'x-outlet-id': saasContext.outletId,
-                'Content-Type': 'application/json',
-            }
+            headers,
         });
 
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Failed to fetch products:', errorText);
+
+            if (response.status === 401) {
+                throw new Error('Session expired - please log in again');
+            }
+
             throw new Error(`Failed to fetch from ${url}. Status: ${response.status}. Msg: ${errorText}`);
         }
         const json = await response.json();
@@ -136,13 +154,12 @@ export const SyncService = {
             if (!navigator.onLine) return;
 
             try {
-                const outletId = usePOSStore.getState().outletId;
-                if (!outletId) return;
+                // ✅ SECURITY FIX: Use signed token instead of raw headers
+                const headers = getAuthHeaders();
+                if (!headers['Authorization']) return;
 
                 const response = await fetch(`${process.env.NEXT_PUBLIC_TRACKER_URL}/api/trpc/pos.checkSync?input=${encodeURIComponent(JSON.stringify({ json: { productsVersion: 0 } }))}`, {
-                    headers: {
-                        'x-outlet-id': outletId
-                    }
+                    headers,
                 });
 
                 if (response.ok) {

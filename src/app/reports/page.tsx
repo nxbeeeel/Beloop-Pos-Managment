@@ -128,13 +128,14 @@ export default function ReportsPage() {
                                         trend.map((item, idx) => {
                                             const max = Math.max(...trend.map(t => t.amount));
                                             const height = (item.amount / max) * 100;
-                                            // eslint-disable-next-line
-                                            const barStyle = { height: `${height}%` };
+                                            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                                            // @ts-ignore
+                                            const barStyle = { '--bar-height': `${height}%` } as React.CSSProperties;
                                             return (
                                                 <div key={idx} className="flex-1 flex flex-col items-center group relative">
-                                                    {/* eslint-disable-next-line */}
                                                     <div
-                                                        className="w-full bg-primary/80 rounded-t-sm hover:bg-primary transition-all"
+                                                        className="w-full bg-primary/80 rounded-t-sm hover:bg-primary transition-all h-[var(--bar-height)]"
+                                                        // eslint-disable-next-line
                                                         style={barStyle}
                                                     ></div>
                                                     <div className="absolute bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs p-1 rounded whitespace-nowrap z-10">
