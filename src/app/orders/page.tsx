@@ -63,7 +63,7 @@ export default function OrdersPage() {
     const { POSExtendedService } = require('@/services/pos-extended'); // Lazy load or move to top if prefer
 
     const handleVoid = async (reason: string) => {
-        if (!selectedOrder) return;
+        if (!selectedOrder || !tenantId || !outletId) return;
         setIsLoading(true);
         try {
             const { POSExtendedService } = await import('@/services/pos-extended');
@@ -151,13 +151,11 @@ export default function OrdersPage() {
                 />
             )}
 
-            {/* Import OrderActionModal dynamically or standard if at top */}
             {selectedOrder && showActionModal && (
-                <div style={{ position: 'fixed', zIndex: 9999 }}>
-                    {/* We need to import the component. For now assuming it is imported at top. */}
-                    {/* Wait, I cannot add imports easily in this chunk. I should use a separate tool call for imports. */}
-                </div>
+                <OrderActionModal
+                    isOpen={showActionModal}
+                    onClose={() => setShowActionModal(false)}
+                    onVoid={handleVoid}
+                    orderId={selectedOrder.id}
+                />
             )}
-        </div>
-    );
-}

@@ -30,6 +30,7 @@ export default function ClosingPage() {
     }, []);
 
     const loadStats = async () => {
+        if (!tenantId || !outletId) return;
         try {
             const { POSExtendedService } = await import('@/services/pos-extended');
             const data = await POSExtendedService.getDailyStats({ tenantId, outletId }, new Date().toISOString().split('T')[0]);
@@ -40,6 +41,10 @@ export default function ClosingPage() {
     };
 
     const handleCloseDay = async () => {
+        if (!tenantId || !outletId) {
+            toast.error("Session missing info. Please logout and login.");
+            return;
+        }
         setIsLoading(true);
         try {
             const { POSExtendedService } = await import('@/services/pos-extended');
