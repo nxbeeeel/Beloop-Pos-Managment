@@ -71,11 +71,30 @@ export default function POSPage() {
     }, []);
 
     useEffect(() => {
-        if (isLoaded && user && tenantId && outletId) {
-            setSaaSContext(tenantId, outletId);
-            fetchMenu(saasContext);
-            SyncService.startPolling();
-        }
+        const initPOS = async () => {
+            if (isLoaded && user && tenantId && outletId) {
+                try {
+                    // Authenticate with Backend to get POS Token
+                    const { loginToPos } = await import('@/services/pos-auth');
+                    const authResult = await loginToPos(outletId);
+
+                    if (!authResult.success) {
+                        console.error("POS Auth Failed:", authResult.error);
+                        usePOSStore.setState({ error: `Auth Failed: ${authResult.error}` });
+                        return;
+                    }
+
+                    // Success! Initialize Store
+                    setSaaSContext(tenantId, outletId);
+                    fetchMenu(saasContext);
+                    SyncService.startPolling();
+                } catch (err) {
+                    console.error("POS Init Error:", err);
+                }
+            }
+        };
+
+        initPOS();
     }, [isLoaded, user, fetchMenu, tenantId, outletId, setSaaSContext]);
 
     useEffect(() => {
