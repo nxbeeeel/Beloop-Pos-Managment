@@ -159,3 +159,6 @@ export default function OrdersPage() {
                     orderId={selectedOrder.id}
                 />
             )}
+        </div>
+    );
+}
