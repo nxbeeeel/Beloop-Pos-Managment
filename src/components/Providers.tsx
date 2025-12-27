@@ -5,6 +5,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { useState, useEffect } from 'react';
 import { createIDBPersister } from '@/lib/persister';
 import { SyncService } from '@/services/sync';
+import { Toaster } from 'sonner';
 
 const persister = createIDBPersister();
 
@@ -36,11 +37,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <PersistQueryClientProvider 
-            client={queryClient} 
+        <PersistQueryClientProvider
+            client={queryClient}
             persistOptions={{ persister }}
         >
             {children}
+            <Toaster />
         </PersistQueryClientProvider>
     );
 }
