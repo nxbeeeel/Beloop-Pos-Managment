@@ -3,7 +3,8 @@
 import { usePOSStore } from "@/lib/store";
 import { ArrowLeft, Clock, Receipt, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
 import { Receipt as ReceiptModal } from "@/components/Receipt";
 
 export default function OrdersPage() {
