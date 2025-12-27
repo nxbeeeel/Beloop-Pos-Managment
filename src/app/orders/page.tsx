@@ -33,10 +33,30 @@ export default function OrdersPage() {
         loadHistory();
     }, [tenantId, outletId]);
 
-    // Merge recent local orders (not yet synced?) with server orders
-    // For simplicity, we prioritize Server Orders, as they are "History".
-    // Local orders are "Recent Activity". 
-    // Let's just show Server Orders for the "History" page.
+    // Merge local orders (optimistic / offline) with server orders
+    // Prioritize server version if it exists (status might be updated), otherwise show local
+    const mergedOrders = [...localOrders, ...serverOrders].reduce((acc, current) => {
+        const x = acc.find((item: any) => item.id === current.id);
+        if (!x) {
+            return acc.concat([current]);
+        } else {
+            // If we have both, prefer the one that is 'COMPLETED' or has more info? 
+            // Usually Server is source of truth.
+            // If server has it, use server (it might be in 'COMPLETED' where local is still 'PENDING' if we had that distinction)
+            // Currently both are COMPLETED. Let's trust Server if present.
+            // If current is from Server (we know this because we merged local THEN server?), we replace?
+            // Actually reduce is tricky with order.
+            // Let's use a Map for O(1)
+            return acc;
+        }
+    }, []);
+
+    // Better Merge Strategy:
+    const serverOrderIds = new Set(serverOrders.map(o => o.id));
+    const uniqueLocalOrders = localOrders.filter(o => !serverOrderIds.has(o.id));
+    const allOrders = [...uniqueLocalOrders, ...serverOrders].sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
@@ -47,19 +67,19 @@ export default function OrdersPage() {
                             <ArrowLeft size={24} className="text-gray-600" />
                         </button>
                     </Link>
-                    <h1 className="text-2xl font-bold text-gray-900">Order History (Server)</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Order History</h1>
                 </div>
 
                 <div className="grid gap-4">
-                    {isLoading ? (
+                    {isLoading && allOrders.length === 0 ? (
                         <div className="text-center py-12"><div className="animate-spin w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full mx-auto"></div></div>
-                    ) : serverOrders.length === 0 ? (
+                    ) : allOrders.length === 0 ? (
                         <div className="text-center py-12 text-gray-500 bg-white rounded-2xl shadow-sm">
                             <Clock size={48} className="mx-auto mb-4 opacity-20" />
                             <p className="text-lg font-medium">No orders found</p>
                         </div>
                     ) : (
-                        serverOrders.map((order) => (
+                        allOrders.map((order) => (
                             <div
                                 key={order.id}
                                 className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md hover:border-rose-100 transition-all cursor-pointer group"
