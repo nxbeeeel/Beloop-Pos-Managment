@@ -9,9 +9,10 @@ import { usePOSStore } from '@/lib/store';
 interface ReceiptProps {
     order: any;
     onClose: () => void;
+    onVoid?: () => void;
 }
 
-export function Receipt({ order, onClose }: ReceiptProps) {
+export function Receipt({ order, onClose, onVoid }: ReceiptProps) {
     const { printReceipt, isPrinting } = usePrinter();
     const { outlet } = usePOSStore();
 
@@ -77,12 +78,22 @@ export function Receipt({ order, onClose }: ReceiptProps) {
 
                 {/* Actions */}
                 <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 hover:bg-gray-100 transition-colors"
-                    >
-                        New Order
-                    </button>
+                    {onVoid ? (
+                        <button
+                            onClick={onVoid}
+                            className="flex-1 py-3 bg-red-50 border border-red-100 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-colors"
+                        >
+                            Void Order
+                        </button>
+                    ) : (
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            New Order
+                        </button>
+                    )}
+
                     <button
                         onClick={() => printReceipt('receipt-content')}
                         disabled={isPrinting}

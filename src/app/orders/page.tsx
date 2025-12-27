@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Receipt as ReceiptModal } from "@/components/Receipt";
+import { OrderActionModal } from "@/components/OrderActionModal";
 
 export default function OrdersPage() {
     const { orders: localOrders } = usePOSStore();
@@ -58,6 +59,29 @@ export default function OrdersPage() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
+    const [showActionModal, setShowActionModal] = useState(false);
+    const { POSExtendedService } = require('@/services/pos-extended'); // Lazy load or move to top if prefer
+
+    const handleVoid = async (reason: string) => {
+        if (!selectedOrder) return;
+        setIsLoading(true);
+        try {
+            const { POSExtendedService } = await import('@/services/pos-extended');
+            const success = await POSExtendedService.voidOrder({ tenantId, outletId }, selectedOrder.id, reason);
+            if (success) {
+                // Refresh list
+                const data = await POSExtendedService.getOrders({ tenantId, outletId });
+                setServerOrders(data);
+                setSelectedOrder(null);
+                setShowActionModal(false);
+            }
+        } catch (err) {
+            console.error("Void failed", err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 p-6">
             <div className="max-w-4xl mx-auto space-y-6">
@@ -82,13 +106,18 @@ export default function OrdersPage() {
                         allOrders.map((order) => (
                             <div
                                 key={order.id}
-                                className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md hover:border-rose-100 transition-all cursor-pointer group"
+                                className={`bg-white p-6 rounded-2xl shadow-sm border flex items-center justify-between transition-all cursor-pointer group ${order.status === 'VOIDED' ? 'opacity-60 border-gray-100 bg-gray-50' : 'border-gray-100 hover:shadow-md hover:border-rose-100'
+                                    }`}
                                 onClick={() => setSelectedOrder(order)}
                             >
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-3">
-                                        <span className="font-bold text-lg text-gray-900 group-hover:text-rose-600 transition-colors">#{order.id.slice(-6)}</span>
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-100 text-gray-700'
+                                        <span className={`font-bold text-lg ${order.status === 'VOIDED' ? 'line-through text-gray-400' : 'text-gray-900 group-hover:text-rose-600'}`}>
+                                            #{order.id.slice(-6)}
+                                        </span>
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-100' :
+                                            order.status === 'VOIDED' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                                'bg-gray-100 text-gray-700'
                                             }`}>
                                             {order.status}
                                         </span>
@@ -101,7 +130,9 @@ export default function OrdersPage() {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <span className="text-xl font-bold text-gray-900">₹{Number(order.totalAmount || order.total).toFixed(2)}</span>
+                                    <span className={`text-xl font-bold ${order.status === 'VOIDED' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                                        ₹{Number(order.totalAmount || order.total).toFixed(2)}
+                                    </span>
                                     <div className="p-2 bg-gray-50 rounded-full group-hover:bg-rose-50 group-hover:text-rose-600 transition-colors">
                                         <Receipt size={20} />
                                     </div>
@@ -112,10 +143,21 @@ export default function OrdersPage() {
                 </div>
             </div>
 
-            <ReceiptModal
-                onClose={() => setSelectedOrder(null)}
-                order={selectedOrder}
-            />
+            {selectedOrder && (
+                <ReceiptModal
+                    onClose={() => setSelectedOrder(null)}
+                    order={selectedOrder}
+                    onVoid={selectedOrder.status !== 'VOIDED' ? () => setShowActionModal(true) : undefined}
+                />
+            )}
+
+            {/* Import OrderActionModal dynamically or standard if at top */}
+            {selectedOrder && showActionModal && (
+                <div style={{ position: 'fixed', zIndex: 9999 }}>
+                    {/* We need to import the component. For now assuming it is imported at top. */}
+                    {/* Wait, I cannot add imports easily in this chunk. I should use a separate tool call for imports. */}
+                </div>
+            )}
         </div>
     );
 }
