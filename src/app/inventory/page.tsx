@@ -206,6 +206,7 @@ export default function InventoryPage() {
                                                         <button
                                                             className="p-1.5 bg-gray-100 rounded hover:bg-gray-200"
                                                             onClick={() => handleQuickAdjust(product.sku, -1)}
+                                                            aria-label="Decrease stock"
                                                         >
                                                             <Minus size={14} />
                                                         </button>
@@ -224,16 +225,20 @@ export default function InventoryPage() {
                                                             <button
                                                                 className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100"
                                                                 onClick={() => setCounts(prev => ({ ...prev, [product.id]: (prev[product.id] ?? current) - 1 }))}
+                                                                aria-label="Decrease count"
                                                             ><Minus size={14} /></button>
                                                             <input
                                                                 type="number"
                                                                 className={`w-20 text-center font-bold text-lg border-b-2 bg-transparent focus:outline-none ${counts[product.id] !== undefined ? 'border-rose-500 text-rose-600' : 'border-gray-200 text-gray-900'}`}
                                                                 value={counts[product.id] ?? current}
                                                                 onChange={(e) => setCounts(prev => ({ ...prev, [product.id]: Number(e.target.value) }))}
+                                                                aria-label="Actual count"
+                                                                placeholder="0"
                                                             />
                                                             <button
                                                                 className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100"
                                                                 onClick={() => setCounts(prev => ({ ...prev, [product.id]: (prev[product.id] ?? current) + 1 }))}
+                                                                aria-label="Increase count"
                                                             ><Plus size={14} /></button>
                                                         </div>
                                                     </td>
@@ -256,16 +261,20 @@ export default function InventoryPage() {
                                                         <button
                                                             className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${orderQty > 0 ? 'border-blue-200 bg-blue-50 text-blue-600' : 'border-gray-200'}`}
                                                             onClick={() => setOrderQtys(prev => ({ ...prev, [product.id]: Math.max(0, (prev[product.id] || 0) - 1) }))}
+                                                            aria-label="Decrease order quantity"
                                                         ><Minus size={14} /></button>
                                                         <input
                                                             type="number"
                                                             className={`w-20 text-center font-bold text-lg border-b-2 bg-transparent focus:outline-none ${orderQty > 0 ? 'border-blue-500 text-blue-600' : 'border-gray-200 text-gray-300'}`}
                                                             value={orderQty}
                                                             onChange={(e) => setOrderQtys(prev => ({ ...prev, [product.id]: Math.max(0, Number(e.target.value)) }))}
+                                                            aria-label="Order quantity"
+                                                            placeholder="0"
                                                         />
                                                         <button
                                                             className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${orderQty > 0 ? 'border-blue-200 bg-blue-50 text-blue-600' : 'border-gray-200'}`}
                                                             onClick={() => setOrderQtys(prev => ({ ...prev, [product.id]: (prev[product.id] || 0) + 1 }))}
+                                                            aria-label="Increase order quantity"
                                                         ><Plus size={14} /></button>
                                                     </div>
                                                 </td>
