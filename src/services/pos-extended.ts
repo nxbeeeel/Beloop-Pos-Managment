@@ -140,29 +140,40 @@ export const POSExtendedService = {
     },
 
     createStockOrder: async (context: { tenantId: string; outletId: string }, items: { productId: string; qty: number }[], notes?: string) => {
-        const payload = {
-            items, notes     async getDailyStats(saasContext: { tenantId: string; outletId: string }, date: string) {
-                const url = `${TRACKER_URL}/api/trpc/pos.getDailyStats?input=${encodeURIComponent(JSON.stringify({ json: { date } }))}`;
-                const headers = getAuthHeaders();
-                const response = await fetch(url, { headers });
-                if (!response.ok) return { systemCash: 0, systemTotal: 0, orderCount: 0 };
-                const data = await response.json();
-                return data.result.data.json;
-            },
-
-            async submitDailyClose(saasContext: { tenantId: string; outletId: string }, data: any) {
-                const url = `${TRACKER_URL}/api/trpc/pos.submitDailyClose`;
-                const headers = getAuthHeaders();
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ json: data })
-                });
-                if (!response.ok) return false;
-                return true;
-            }
-        };
+        const payload = { items, notes };
         const response = await api.post(`/api/trpc/pos.createPurchaseOrder`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    voidOrder: async (context: { tenantId: string; outletId: string }, orderId: string, reason: string) => {
+        const payload = { orderId, reason };
+        const response = await api.post(`/api/trpc/pos.voidOrder`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    getDailyStats: async (context: { tenantId: string; outletId: string }, date: string) => {
+        const input = encodeURIComponent(JSON.stringify({ date }));
+        const response = await api.get(`/api/trpc/pos.getDailyStats?input=${input}`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    submitDailyClose: async (context: { tenantId: string; outletId: string }, data: any) => {
+        const response = await api.post(`/api/trpc/pos.submitDailyClose`, data, {
             headers: {
                 'x-tenant-id': context.tenantId,
                 'x-outlet-id': context.outletId
