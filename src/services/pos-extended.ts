@@ -112,6 +112,41 @@ export const POSExtendedService = {
                 'x-outlet-id': context.outletId
             }
         });
-        return response.data.result;
+        return response.data; // Fixed type return
+    },
+
+    // --- New Features (Orders & Advanced Inventory) ---
+
+    getOrders: async (context: { tenantId: string; outletId: string }, limit = 50, offset = 0) => {
+        const input = encodeURIComponent(JSON.stringify({ limit, offset }));
+        const response = await api.get(`/api/trpc/pos.getOrders?input=${input}`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    submitStockCount: async (context: { tenantId: string; outletId: string }, items: { productId: string; countedQty: number }[], notes?: string) => {
+        const payload = { items, notes };
+        const response = await api.post(`/api/trpc/pos.createStockCount`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    createStockOrder: async (context: { tenantId: string; outletId: string }, items: { productId: string; qty: number }[], notes?: string) => {
+        const payload = { items, notes };
+        const response = await api.post(`/api/trpc/pos.createPurchaseOrder`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
     }
 };
