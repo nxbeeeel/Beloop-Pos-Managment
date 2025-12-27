@@ -113,7 +113,9 @@ export default function POSPage() {
     const envOutletId = process.env.NEXT_PUBLIC_OUTLET_ID;
     const userOutletId = user.publicMetadata?.outletId as string;
 
-    const isAuthorized = userOutletId === envOutletId;
+    const isAuthorized = envOutletId
+        ? userOutletId === envOutletId
+        : !!userOutletId;
 
     if (!isAuthorized) {
         // If user is Super Admin or Brand Admin, maybe allow? For now, strict block.
@@ -134,8 +136,8 @@ export default function POSPage() {
                             Your account is not assigned to this specific Outlet/Device.
                         </p>
                         <p className="text-xs text-gray-400 mt-4 font-mono">
-                            POS Outlet: {envOutletId?.slice(-6)}...<br />
-                            Your Outlet: {userOutletId ? userOutletId.slice(-6) + '...' : 'None'}
+                            POS Outlet: {envOutletId ? envOutletId.slice(-6) + '...' : 'Dynamic Mode (Auto-Detect)'}<br />
+                            Your Outlet: {userOutletId ? userOutletId.slice(-6) + '...' : 'None Assigned'}
                         </p>
                     </div>
                     <div className="flex gap-4">
