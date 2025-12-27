@@ -5,6 +5,9 @@ const isPublicRoute = createRouteMatcher([
     "/api/trpc(.*)",
     "/sign-in(.*)",
     "/sign-up(.*)",
+    "/orders(.*)",
+    "/inventory(.*)",
+    "/settings(.*)",
     "/" // Allow root access for SignedOut view
 ]);
 

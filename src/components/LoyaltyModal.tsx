@@ -96,10 +96,18 @@ export const LoyaltyModal = ({ isOpen, onClose, saasContext }: LoyaltyModalProps
                                                         autoFocus
                                                     />
                                                     <button
-                                                        onClick={() => {
+                                                        onClick={async () => {
                                                             if (tempName) {
-                                                                const { registerCustomer } = usePOSStore.getState();
-                                                                registerCustomer(tempName, loyalty.customer?.phoneNumber || phone, saasContext);
+                                                                try {
+                                                                    setLoading(true);
+                                                                    const { registerCustomer } = usePOSStore.getState();
+                                                                    await registerCustomer(tempName, loyalty.customer?.phoneNumber || phone, saasContext);
+                                                                } catch (e) {
+                                                                    console.error("Registration failed", e);
+                                                                    // Optional: Add toast here
+                                                                } finally {
+                                                                    setLoading(false);
+                                                                }
                                                             }
                                                         }}
                                                         disabled={!tempName}
