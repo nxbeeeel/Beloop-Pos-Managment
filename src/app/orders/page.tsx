@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Receipt as ReceiptModal } from "@/components/Receipt";
 
 export default function OrdersPage() {
-    const { orders: localOrders, user: posUser } = usePOSStore();
+    const { orders: localOrders } = usePOSStore();
     const [serverOrders, setServerOrders] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
