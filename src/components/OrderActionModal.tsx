@@ -19,7 +19,7 @@ export function OrderActionModal({ isOpen, onClose, onVoid, orderId }: OrderActi
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-gray-900">Manage Order #{orderId.slice(-6)}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full" aria-label="Close Modal">
                         <XCircle className="text-gray-500" />
                     </button>
                 </div>
