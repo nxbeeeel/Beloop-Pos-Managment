@@ -1,4 +1,3 @@
-```javascript
 import { useState } from 'react';
 import { XCircle, AlertTriangle, Calculator } from 'lucide-react';
 
