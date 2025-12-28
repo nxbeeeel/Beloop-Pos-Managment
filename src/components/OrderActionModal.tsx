@@ -1,5 +1,6 @@
+```javascript
 import { useState } from 'react';
-import { XCircle, AlertTriangle, Keypad } from 'lucide-react';
+import { XCircle, AlertTriangle, Calculator } from 'lucide-react';
 
 interface OrderActionModalProps {
     isOpen: boolean;
@@ -46,7 +47,7 @@ export function OrderActionModal({ isOpen, onClose, onVoid, orderId }: OrderActi
                                 className="w-full p-4 bg-gray-50 text-gray-400 rounded-xl flex items-center gap-3 cursor-not-allowed text-left"
                             >
                                 <div className="p-2 bg-white rounded-lg">
-                                    <Keypad size={24} />
+                                    <Calculator size={24} />
                                 </div>
                                 <div>
                                     <div className="font-bold">Refund (Full/Partial)</div>
