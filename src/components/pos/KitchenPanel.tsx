@@ -13,7 +13,10 @@ export function KitchenPanel({ tenantId, outletId }: KitchenPanelProps) {
     useEffect(() => {
         const load = async () => {
             try {
-                if (!tenantId || !outletId) return;
+                if (!tenantId || !outletId) {
+                    setIsLoading(false);
+                    return;
+                }
 
                 const { get: getIDB, set: setIDB } = await import('idb-keyval');
                 const cached = await getIDB('offline:kitchen');
