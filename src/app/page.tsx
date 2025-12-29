@@ -9,7 +9,8 @@ import { PaymentModal } from "@/components/PaymentModal";
 import { Receipt } from "@/components/Receipt";
 import { LoyaltyModal } from "@/components/LoyaltyModal";
 import { SyncService } from "@/services/sync";
-import { Loader2, ShoppingBag, RotateCw, Menu, History, Package, X, Home, Settings, LogOut } from "lucide-react";
+import { SyncStatusIndicator } from "@/components/SyncStatus";
+import { Loader2, ShoppingBag, RotateCw, Menu, History, Package, X, Home, Settings, LogOut, Users, ChefHat } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
@@ -213,6 +214,7 @@ export default function POSPage() {
                                 <span className="hidden sm:inline">Inventory</span>
                             </button>
                         </Link>
+                        <SyncStatusIndicator />
                         <button
                             onClick={() => window.location.reload()}
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all active:scale-95"
@@ -309,6 +311,18 @@ export default function POSPage() {
                                     <div className="flex items-center gap-3 px-4 py-3 bg-rose-50 text-rose-600 rounded-xl font-medium">
                                         <Home size={20} />
                                         Home
+                                    </div>
+                                </Link>
+                                <Link href="/tables" onClick={() => setIsSidebarOpen(false)}>
+                                    <div className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-colors">
+                                        <Users size={20} />
+                                        Tables
+                                    </div>
+                                </Link>
+                                <Link href="/kitchen" onClick={() => setIsSidebarOpen(false)}>
+                                    <div className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-colors">
+                                        <ChefHat size={20} />
+                                        Kitchen
                                     </div>
                                 </Link>
                                 <Link href="/orders" onClick={() => setIsSidebarOpen(false)}>

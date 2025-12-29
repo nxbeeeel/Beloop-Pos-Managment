@@ -180,5 +180,149 @@ export const POSExtendedService = {
             }
         });
         return response.data.result.data;
+    },
+
+    // ============================================
+    // ENTERPRISE: TABLE MANAGEMENT
+    // ============================================
+
+    openTable: async (context: { tenantId: string; outletId: string }, tableNumber: string, customerName?: string) => {
+        const payload = { tableNumber, customerName };
+        const response = await api.post(`/api/trpc/pos.openTable`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    addItemsToTable: async (context: { tenantId: string; outletId: string }, orderId: string, items: any[]) => {
+        const payload = { orderId, items };
+        const response = await api.post(`/api/trpc/pos.addItemsToTable`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    getOpenTables: async (context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getOpenTables`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    closeTable: async (context: { tenantId: string; outletId: string }, orderId: string, paymentMethod: string, discount?: number) => {
+        const payload = { orderId, paymentMethod, discount };
+        const response = await api.post(`/api/trpc/pos.closeTable`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    // ============================================
+    // ENTERPRISE: KITCHEN DISPLAY
+    // ============================================
+
+    getKitchenOrders: async (context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getKitchenOrders`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    updateKitchenStatus: async (context: { tenantId: string; outletId: string }, orderId: string, status: 'NEW' | 'PREPARING' | 'READY' | 'SERVED') => {
+        const payload = { orderId, status };
+        const response = await api.post(`/api/trpc/pos.updateKitchenStatus`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    // ============================================
+    // ENTERPRISE: SHIFT MANAGEMENT
+    // ============================================
+
+    startShift: async (context: { tenantId: string; outletId: string }, openingCash: number) => {
+        const payload = { openingCash };
+        const response = await api.post(`/api/trpc/pos.startShift`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    endShift: async (context: { tenantId: string; outletId: string }, shiftId: string, closingCash: number, notes?: string) => {
+        const payload = { shiftId, closingCash, notes };
+        const response = await api.post(`/api/trpc/pos.endShift`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    getActiveShift: async (context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getActiveShift`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    // ============================================
+    // ENTERPRISE: HOLD ORDERS
+    // ============================================
+
+    holdOrder: async (context: { tenantId: string; outletId: string }, orderId: string, reason?: string) => {
+        const payload = { orderId, reason };
+        const response = await api.post(`/api/trpc/pos.holdOrder`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    resumeOrder: async (context: { tenantId: string; outletId: string }, orderId: string) => {
+        const payload = { orderId };
+        const response = await api.post(`/api/trpc/pos.resumeOrder`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    getHeldOrders: async (context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getHeldOrders`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
     }
 };
