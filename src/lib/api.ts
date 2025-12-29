@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_TRACKER_URL || (process.env.NODE_ENV === 'development'
     ? 'http://localhost:3000'
-    : '/api');
+    : (() => { throw new Error("Missing NEXT_PUBLIC_TRACKER_URL environment variable"); })());
 
 export const api = axios.create({
     baseURL: API_URL,

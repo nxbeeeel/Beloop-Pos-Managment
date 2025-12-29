@@ -71,6 +71,10 @@ export const DataEngine = {
     async refreshCustomers(context: { tenantId: string }) {
         try {
             const baseUrl = process.env.NEXT_PUBLIC_TRACKER_URL;
+            if (!baseUrl) {
+                console.error("[DataEngine] Missing NEXT_PUBLIC_TRACKER_URL");
+                return null;
+            }
             // Needed: Access token
             const { getAuthHeaders } = await import('@/services/pos-auth');
             const headers = getAuthHeaders();

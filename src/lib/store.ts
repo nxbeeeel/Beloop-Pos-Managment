@@ -560,8 +560,26 @@ export const usePOSStore = create<POSState>()(
         {
             name: 'pos-storage',
             storage: createJSONStorage(() => storage),
+            partialize: (state) => ({
+                // Persist only long-term state
+                cart: state.cart,
+                orders: state.orders,
+                products: state.products, // Cache products for offline
+                categories: state.categories,
+                overrides: state.overrides,
+                activeStaff: state.activeStaff,
+                tenantId: state.tenantId,
+                outletId: state.outletId,
+                outlet: state.outlet,
+                taxRate: state.taxRate,
+                loyalty: state.loyalty
+            }),
             onRehydrateStorage: () => (state) => {
-                // state?.fetchMenu(); // Removed: Called from page.tsx with context
+                // Reset transient state just in case
+                if (state) {
+                    state.isLoading = false;
+                    state.error = null;
+                }
             }
         }
     )
