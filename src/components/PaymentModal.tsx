@@ -15,7 +15,7 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
     const [method, setMethod] = useState<'CASH' | 'CARD' | 'QR'>('CASH');
     const [tendered, setTendered] = useState<string>('');
 
-    const change = method === 'CASH' && tendered ? Math.max(0, parseFloat(tendered) - total) : 0;
+    const change = method === 'CASH' && tendered ? Math.max(0, parseFloat(tendered || '0') - total) : 0;
     const isValid = method !== 'CASH' || (parseFloat(tendered) >= total);
 
     if (!isOpen) return null;
