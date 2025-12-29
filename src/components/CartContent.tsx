@@ -1,37 +1,80 @@
 "use client";
 
+import { useState } from "react";
 import { usePOSStore } from "@/lib/store";
 import { CartItem } from "./CartItem";
-import { ShoppingBag, Trash2, CreditCard, Gift } from "lucide-react";
+import { ShoppingBag, Trash2, CreditCard, Gift, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export const CartContent = () => {
     const {
         cart,
         clearCart,
-        discount,
-        setDiscount,
-        loyalty
+        activeDiscount,
+        applyDiscount,
+        removeDiscount,
+        loyalty,
+        total,
+        tenantId,
+        outletId
     } = usePOSStore();
 
-    // Calculate totals
+    const [couponCode, setCouponCode] = useState("");
+    const [couponError, setCouponError] = useState<string | null>(null);
+    const [isValidating, setIsValidating] = useState(false);
+
+    // Calculate totals for display
     const subtotal = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
+    const finalTotal = total();
 
-    // Calculate discount amount
-    const discountAmount = subtotal * (discount / 100);
+    // Reverse calculate discount amount from total for display
+    // Logic: Subtotal - (Discount) - (Loyalty) = Total
+    // But Loyalty is applied AFTER discount usually.
+    // Store logic: Total = (Subtotal - Discount) - Loyalty
+    // So Discount = Subtotal - (Total + Loyalty) ??? 
+    // Easier to just recalculate discount amount based on activeDiscount
 
-    // Calculate loyalty reward deduction
-    let loyaltyDeduction = 0;
-    if (loyalty.rewardApplied && loyalty.progress?.reward) {
-        const reward = loyalty.progress.reward;
-        if (reward.type === 'PERCENTAGE') {
-            loyaltyDeduction = (subtotal - discountAmount) * (Number(reward.value) / 100);
-        } else if (reward.type === 'FLAT') {
-            loyaltyDeduction = Number(reward.value);
+    let discountAmount = 0;
+    if (activeDiscount) {
+        if (activeDiscount.type === 'PERCENTAGE') {
+            discountAmount = subtotal * (activeDiscount.value / 100);
+        } else if (activeDiscount.type === 'FIXED') {
+            discountAmount = activeDiscount.value;
         }
     }
+    // Cap discount to subtotal
+    discountAmount = Math.min(discountAmount, subtotal);
 
-    const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDeduction);
+    const handleApplyCoupon = async () => {
+        if (!couponCode.trim() || !tenantId || !outletId) return;
+        setIsValidating(true);
+        setCouponError(null);
+        try {
+            const { POSExtendedService } = await import('@/services/pos-extended');
+            const coupon = await POSExtendedService.validateCoupon(
+                { tenantId, outletId },
+                couponCode,
+                subtotal
+            );
+
+            applyDiscount(coupon.type as any, Number(coupon.value), coupon.code);
+            setCouponCode("");
+        } catch (err: any) {
+            console.error(err);
+            setCouponError(err.message || 'Invalid coupon');
+            removeDiscount();
+        } finally {
+            setIsValidating(false);
+        }
+    };
+
+    const handleManualDiscount = (val: number) => {
+        if (val === 0) {
+            removeDiscount();
+        } else {
+            applyDiscount('PERCENTAGE', val); // Manual is always percentage for now
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -89,57 +132,70 @@ export const CartContent = () => {
                         <span>Subtotal</span>
                         <span className="font-medium text-gray-900">₹{subtotal.toFixed(2)}</span>
                     </div>
+                    {/* Tax Display */}
+                    <div className="flex justify-between text-gray-500 text-sm">
+                        <span>Tax ({usePOSStore.getState().taxRate}%)</span>
+                        <span className="font-medium text-gray-900">₹{(subtotal - discountAmount) * (usePOSStore.getState().taxRate / 100) > 0 ? ((subtotal - discountAmount) * (usePOSStore.getState().taxRate / 100)).toFixed(2) : '0.00'}</span>
+                    </div>
 
                     {/* Discount Section */}
                     <div className="space-y-2">
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-gray-500 font-medium">Discount</span>
-                            <span className="text-rose-600 font-bold">-{discount}%</span>
+                            {activeDiscount && (
+                                <span className="text-rose-600 font-bold flex items-center gap-1">
+                                    {activeDiscount.code ? (
+                                        <span className="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[10px] tracking-wide uppercase">{activeDiscount.code}</span>
+                                    ) : (
+                                        <span>MANUAL</span>
+                                    )}
+                                    -₹{discountAmount.toFixed(2)}
+                                </span>
+                            )}
                         </div>
-                        <div className="flex gap-2">
-                            {[0, 5, 10, 20].map((d) => (
-                                <button
-                                    key={d}
-                                    onClick={() => setDiscount(d)}
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-all ${discount === d
-                                        ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                                        : 'bg-white text-gray-600 border-gray-200 hover:border-rose-200 hover:text-rose-600'
-                                        }`}
-                                >
-                                    {d === 0 ? 'None' : `${d}%`}
-                                </button>
-                            ))}
-                            <div className="relative flex-1">
-                                <input
-                                    type="number"
-                                    value={discount}
-                                    onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value))))}
-                                    className="w-full py-1.5 text-xs font-bold text-center rounded-lg border border-gray-200 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none"
-                                    placeholder="Custom"
-                                />
-                                <span className="absolute right-1 top-1.5 text-[10px] text-gray-400">%</span>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div className="h-px bg-gray-100 my-2" />
-
-                    {/* Detailed Breakdown */}
-                    <div className="space-y-1 text-sm">
-                        <div className="flex justify-between text-gray-500">
-                            <span>Subtotal</span>
-                            <span>₹{subtotal.toFixed(2)}</span>
-                        </div>
-                        {discount > 0 && (
-                            <div className="flex justify-between text-rose-600">
-                                <span>Discount ({discount}%)</span>
-                                <span>-₹{((subtotal * discount) / 100).toFixed(2)}</span>
+                        {/* Quick Actions / Coupon Input */}
+                        {!activeDiscount?.code ? (
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    {[0, 5, 10, 20].map((d) => (
+                                        <button
+                                            key={d}
+                                            onClick={() => handleManualDiscount(d)}
+                                            className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-all ${(!activeDiscount && d === 0) || (activeDiscount?.type === 'PERCENTAGE' && activeDiscount.value === d)
+                                                ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                                                : 'bg-white text-gray-600 border-gray-200 hover:border-rose-200 hover:text-rose-600'
+                                                }`}
+                                        >
+                                            {d === 0 ? 'None' : `${d}%`}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Coupon Code"
+                                        value={couponCode}
+                                        onChange={(e) => setCouponCode(e.target.value)}
+                                        className="flex-1 py-1.5 px-3 text-xs font-bold rounded-lg border border-gray-200 focus:border-rose-500 outline-none uppercase"
+                                    />
+                                    <button
+                                        onClick={handleApplyCoupon}
+                                        disabled={isValidating || !couponCode}
+                                        className="px-3 py-1 bg-gray-900 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                                    >
+                                        {isValidating ? '...' : 'Apply'}
+                                    </button>
+                                </div>
+                                {couponError && <p className="text-xs text-red-500 font-medium">{couponError}</p>}
                             </div>
-                        )}
-                        {loyaltyDeduction > 0 && (
-                            <div className="flex justify-between text-green-600 font-medium">
-                                <span className="flex items-center gap-1.5"><Gift size={12} /> Reward</span>
-                                <span>-₹{loyaltyDeduction.toFixed(2)}</span>
+                        ) : (
+                            <div className="bg-rose-50 border border-rose-100 rounded-lg p-2 flex justify-between items-center">
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-rose-700">COUPON APPLIED</span>
+                                    <span className="text-[10px] text-rose-500 uppercase tracking-widest">{activeDiscount.code}</span>
+                                </div>
+                                <button onClick={removeDiscount} className="text-rose-400 hover:text-rose-600"><X size={16} /></button>
                             </div>
                         )}
                     </div>

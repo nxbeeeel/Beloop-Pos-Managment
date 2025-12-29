@@ -1,22 +1,72 @@
-'use client';
-
 import { useState } from 'react';
-import { X, CreditCard, Banknote, QrCode, CheckCircle } from 'lucide-react';
+import { X, CreditCard, Banknote, QrCode, CheckCircle, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePOSStore } from '@/lib/store';
+import { POSExtendedService } from '@/services/pos-extended';
 
 interface PaymentModalProps {
     isOpen: boolean;
     total: number;
     onClose: () => void;
-    onConfirm: (method: string, tendered: number) => void;
+    onConfirm: (method: string, tendered: number, orderId?: string) => void;
 }
 
 export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModalProps) {
+    const { createPendingOrder, tenantId, outletId, setTipAmount, tipAmount } = usePOSStore();
+
+    // Reset tip when opening modal
+    useState(() => {
+        if (isOpen) setTipAmount(0);
+    });
+    const [mode, setMode] = useState<'FULL' | 'SPLIT'>('FULL');
     const [method, setMethod] = useState<'CASH' | 'CARD' | 'QR'>('CASH');
     const [tendered, setTendered] = useState<string>('');
+    const [splitPayments, setSplitPayments] = useState<{ id?: string; method: string; amount: number }[]>([]);
+    const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    const change = method === 'CASH' && tendered ? Math.max(0, parseFloat(tendered || '0') - total) : 0;
-    const isValid = method !== 'CASH' || (parseFloat(tendered) >= total);
+    // Calculate remaining for Split Mode
+    const totalPaid = splitPayments.reduce((acc, p) => acc + p.amount, 0);
+    const remaining = Math.max(0, total - totalPaid);
+
+    // Full Mode Logic
+    const change = mode === 'FULL' && method === 'CASH' && tendered ? Math.max(0, parseFloat(tendered || '0') - total) : 0;
+    const isValidFull = method !== 'CASH' || (parseFloat(tendered) >= total);
+
+    // Split Mode Logic
+    const isValidSplitPayment = method !== 'CASH' || (parseFloat(tendered) > 0);
+    const canFinalizeSplit = remaining <= 0.01; // Floating point tolerance
+
+    const handleAddSplitPayment = async () => {
+        const amt = parseFloat(tendered);
+        if (amt <= 0) return;
+
+        setIsProcessing(true);
+        try {
+            let orderId = currentOrderId;
+
+            // 1. Create Order if not exists
+            if (!orderId) {
+                if (!tenantId || !outletId) { alert("Missing tenant/outlet context"); return; }
+                orderId = await createPendingOrder({ tenantId, outletId });
+                setCurrentOrderId(orderId);
+            }
+
+            // 2. Add Payment to Backend
+            if (tenantId && outletId && orderId) {
+                await POSExtendedService.addPayment({ tenantId, outletId }, orderId, amt, method);
+
+                // 3. Update Local State
+                setSplitPayments([...splitPayments, { method, amount: amt }]);
+                setTendered('');
+            }
+        } catch (err: any) {
+            console.error(err);
+            alert("Failed to record payment: " + err.message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -30,14 +80,40 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
                     className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
                 >
                     {/* Header */}
-                    <div className="bg-gray-900 text-white p-6 flex justify-between items-center">
-                        <div>
-                            <h2 className="text-2xl font-bold">Payment</h2>
-                            <p className="text-gray-400 text-sm">Total Due: <span className="text-white font-mono text-lg">₹{total.toFixed(2)}</span></p>
+                    <div className="bg-gray-900 text-white p-6 flex flex-col gap-4">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h2 className="text-2xl font-bold">Payment</h2>
+                                <div className="flex items-center gap-2 text-sm text-gray-400">
+                                    <span>Total: <span className="text-white font-mono text-lg">₹{total.toFixed(2)}</span></span>
+                                    {usePOSStore.getState().tipAmount > 0 && <span className="text-green-400">+ Tip: ₹{usePOSStore.getState().tipAmount.toFixed(2)}</span>}
+                                    {mode === 'SPLIT' && <span>• Due: <span className="text-rose-400 font-mono text-lg">₹{remaining.toFixed(2)}</span></span>}
+                                </div>
+                            </div>
+                            <div className="flex bg-gray-800 rounded-lg p-1">
+                                <button onClick={() => setMode('FULL')} disabled={!!currentOrderId} className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${mode === 'FULL' ? 'bg-rose-600 text-white' : 'text-gray-400 hover:text-white disabled:opacity-30'}`}>Full</button>
+                                <button onClick={() => setMode('SPLIT')} className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${mode === 'SPLIT' ? 'bg-rose-600 text-white' : 'text-gray-400 hover:text-white'}`}>Split</button>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors ml-2" aria-label="Close payment modal">
+                                <X size={24} />
+                            </button>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors" aria-label="Close payment modal">
-                            <X size={24} />
-                        </button>
+
+                        {/* Tip Selector */}
+                        {mode === 'FULL' && (
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                                <span className="text-xs font-bold text-gray-500 self-center mr-1">ADD TIP:</span>
+                                {[0, 20, 50, 100].map(amt => (
+                                    <button
+                                        key={amt}
+                                        onClick={() => usePOSStore.getState().setTipAmount(amt)}
+                                        className={`px-3 py-1 rounded-full text-xs font-bold border ${usePOSStore.getState().tipAmount === amt ? 'bg-green-600 text-white border-green-600' : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-gray-500'}`}
+                                    >
+                                        {amt === 0 ? 'None' : `₹${amt}`}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Body */}
@@ -64,10 +140,10 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
                         </div>
 
                         {/* Cash Input */}
-                        {method === 'CASH' && (
+                        {(method === 'CASH' || mode === 'SPLIT') && (
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount Tendered</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount {mode === 'SPLIT' ? 'to Pay' : 'Tendered'}</label>
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">₹</span>
                                         <input
@@ -75,42 +151,49 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
                                             value={tendered}
                                             onChange={(e) => setTendered(e.target.value)}
                                             className="w-full pl-8 pr-4 py-3 text-2xl font-mono border border-gray-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
-                                            placeholder="0.00"
+                                            placeholder={mode === 'SPLIT' ? remaining.toFixed(2) : "0.00"}
                                             autoFocus
                                         />
                                     </div>
+                                    {(mode === 'SPLIT' && remaining > 0) && (
+                                        <button onClick={() => setTendered(remaining.toFixed(2))} className="text-xs text-rose-600 font-bold mt-1 hover:underline">Pay Rest (₹{remaining.toFixed(2)})</button>
+                                    )}
                                 </div>
 
-                                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                    <span className="text-gray-500 font-medium">Change Due</span>
-                                    <span className={`text-xl font-bold font-mono ${change > 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                                        ₹{change.toFixed(2)}
-                                    </span>
-                                </div>
+                                {mode === 'FULL' && (
+                                    <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-gray-500 font-medium">Change Due</span>
+                                        <span className={`text-xl font-bold font-mono ${change > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                                            ₹{change.toFixed(2)}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {/* Quick Cash Buttons */}
-                                <div className="flex gap-2">
-                                    {[10, 20, 50, 100].map((amount) => (
+                                {mode === 'FULL' && (
+                                    <div className="flex gap-2">
+                                        {[10, 20, 50, 100].map((amount) => (
+                                            <button
+                                                key={amount}
+                                                onClick={() => setTendered(amount.toString())}
+                                                className="flex-1 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                                            >
+                                                ₹{amount}
+                                            </button>
+                                        ))}
                                         <button
-                                            key={amount}
-                                            onClick={() => setTendered(amount.toString())}
-                                            className="flex-1 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                                            onClick={() => setTendered(total.toFixed(2))}
+                                            className="flex-1 py-2 bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-sm font-bold hover:bg-rose-200 transition-colors"
                                         >
-                                            ₹{amount}
+                                            Exact
                                         </button>
-                                    ))}
-                                    <button
-                                        onClick={() => setTendered(total.toFixed(2))}
-                                        className="flex-1 py-2 bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-sm font-bold hover:bg-rose-200 transition-colors"
-                                    >
-                                        Exact
-                                    </button>
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         {/* Card/QR Instructions */}
-                        {method !== 'CASH' && (
+                        {mode === 'FULL' && method !== 'CASH' && (
                             <div className="flex flex-col items-center justify-center py-8 text-center space-y-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                                 <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm">
                                     {method === 'CARD' ? <CreditCard size={32} className="text-blue-500" /> : <QrCode size={32} className="text-purple-500" />}
@@ -124,14 +207,37 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
                     </div>
 
                     {/* Footer */}
-                    <div className="p-6 border-t border-gray-100 bg-gray-50">
+                    <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-3">
+                        {mode === 'SPLIT' && (
+                            <div className="mb-2">
+                                <h4 className="text-sm font-bold text-gray-700 mb-2">Recorded Payments</h4>
+                                <div className="space-y-1 max-h-24 overflow-y-auto">
+                                    {splitPayments.length === 0 ? <p className="text-xs text-gray-400 italic">No payments recorded yet</p> :
+                                        splitPayments.map((p, i) => (
+                                            <div key={i} className="flex justify-between text-sm bg-white p-2 rounded border border-gray-100">
+                                                <span>{p.method}</span>
+                                                <span className="font-mono font-bold">₹{p.amount.toFixed(2)}</span>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                                <button
+                                    onClick={handleAddSplitPayment}
+                                    disabled={!isValidSplitPayment || remaining <= 0 || isProcessing}
+                                    className="w-full mt-3 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isProcessing ? 'Processing...' : <><Plus size={16} /> Add {method} Payment</>}
+                                </button>
+                            </div>
+                        )}
+
                         <button
-                            onClick={() => onConfirm(method, parseFloat(tendered) || total)}
-                            disabled={!isValid}
+                            onClick={() => onConfirm(method, mode === 'FULL' ? (parseFloat(tendered) || total) : totalPaid, currentOrderId || undefined)}
+                            disabled={mode === 'FULL' ? !isValidFull : !canFinalizeSplit}
                             className="w-full flex items-center justify-center gap-2 bg-rose-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-rose-500/20"
                         >
                             <CheckCircle size={20} />
-                            Complete Payment
+                            {mode === 'FULL' ? 'Complete Payment' : 'Finalize Split Bill'}
                         </button>
                     </div>
                 </motion.div>

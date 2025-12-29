@@ -324,5 +324,46 @@ export const POSExtendedService = {
             }
         });
         return response.data.result.data;
+    },
+
+    // ============================================
+    // ENTERPRISE: DISCOUNTS
+    // ============================================
+
+    validateCoupon: async (context: { tenantId: string; outletId: string }, code: string, orderTotal: number) => {
+        const payload = { code, orderTotal };
+        const response = await api.post(`/api/trpc/pos.validateCoupon`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    // ============================================
+    // ENTERPRISE: PAYMENTS (Split Bill)
+    // ============================================
+
+    addPayment: async (context: { tenantId: string; outletId: string }, orderId: string, amount: number, method: string, reference?: string) => {
+        const payload = { orderId, amount, method, reference };
+        const response = await api.post(`/api/trpc/pos.addPayment`, payload, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
+    },
+
+    getOrderPayments: async (context: { tenantId: string; outletId: string }, orderId: string) => {
+        const input = encodeURIComponent(JSON.stringify(orderId));
+        const response = await api.get(`/api/trpc/pos.getOrderPayments?input=${input}`, {
+            headers: {
+                'x-tenant-id': context.tenantId,
+                'x-outlet-id': context.outletId
+            }
+        });
+        return response.data.result.data;
     }
 };

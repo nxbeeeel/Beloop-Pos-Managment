@@ -66,7 +66,7 @@ export function OrderHistory({ isOpen, onClose }: OrderHistoryProps) {
                                             <span className="font-bold text-gray-900">#{order.id}</span>
                                             <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleTimeString()}</p>
                                         </div>
-                                        <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">
+                                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${order.status === 'VOIDED' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                                             {order.status}
                                         </span>
                                     </div>
@@ -101,6 +101,37 @@ export function OrderHistory({ isOpen, onClose }: OrderHistoryProps) {
                                             <button className="text-rose-600 hover:bg-rose-50 p-2 rounded-lg transition-colors" title="Reprint Receipt">
                                                 <Receipt size={18} />
                                             </button>
+                                            {order.status !== 'VOIDED' && (
+                                                <button
+                                                    onClick={async () => {
+                                                        const pin = prompt('Enter Manager PIN to Void Order:');
+                                                        if (pin === '1234') { // Simple PIN check for now
+                                                            const reason = prompt('Reason for voiding?');
+                                                            if (reason) {
+                                                                try {
+                                                                    const { tenantId, outletId } = usePOSStore.getState();
+                                                                    if (!tenantId || !outletId) return alert('System Error: Missing context');
+
+                                                                    // Dynamically import to avoid clutter if needed, or use direct
+                                                                    const { POSExtendedService } = await import('@/services/pos-extended');
+                                                                    await POSExtendedService.voidOrder({ tenantId, outletId }, order.id, reason);
+                                                                    alert('Order Voided Successfully');
+                                                                    onClose(); // Close to refresh or force refresh
+                                                                } catch (err) {
+                                                                    alert('Failed to void order');
+                                                                    console.error(err);
+                                                                }
+                                                            }
+                                                        } else if (pin !== null) {
+                                                            alert('Invalid PIN');
+                                                        }
+                                                    }}
+                                                    className="text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors ml-2"
+                                                    title="Void Order"
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -108,7 +139,7 @@ export function OrderHistory({ isOpen, onClose }: OrderHistoryProps) {
                         )}
                     </div>
                 </motion.div>
-            </div>
-        </AnimatePresence>
+            </div >
+        </AnimatePresence >
     );
 }

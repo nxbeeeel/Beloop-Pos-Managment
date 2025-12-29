@@ -33,18 +33,35 @@ const navItems: NavItem[] = [
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
+import { PaymentSuccessModal } from "@/components/PaymentSuccessModal";
+
 // ============= MENU PANEL =============
 function MenuPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
-    const { cart, products, categories, isLoading, error, fetchMenu, total, checkout } = usePOSStore();
+    const { cart, products, categories, isLoading, error, fetchMenu, total, checkout, outlet } = usePOSStore();
     const [showPayment, setShowPayment] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+    const [lastOrder, setLastOrder] = useState<any>(null);
 
     useEffect(() => {
         if (tenantId && outletId) fetchMenu({ tenantId, outletId });
+
+        const handleOpenPayment = () => setShowPayment(true);
+        document.addEventListener('open-payment', handleOpenPayment);
+        return () => document.removeEventListener('open-payment', handleOpenPayment);
     }, [tenantId, outletId, fetchMenu]);
 
-    const handleCheckout = async (method: string, tendered: number) => {
-        await checkout(method, tendered, { tenantId, outletId });
-        setShowPayment(false);
+    const handleCheckout = async (method: string, tendered: number, orderId?: string) => {
+        const result = await checkout(method, tendered, { tenantId, outletId }, orderId);
+        if (result) {
+            setLastOrder(result);
+            setShowPayment(false);
+            setShowSuccess(true);
+        }
+    };
+
+    const handleNewOrder = () => {
+        setShowSuccess(false);
+        setLastOrder(null);
     };
 
     if (isLoading && products.length === 0) {
@@ -82,6 +99,13 @@ function MenuPanel({ tenantId, outletId }: { tenantId: string; outletId: string 
                 )}
             </aside>
             <PaymentModal isOpen={showPayment} total={total()} onClose={() => setShowPayment(false)} onConfirm={handleCheckout} />
+            <PaymentSuccessModal
+                isOpen={showSuccess}
+                order={lastOrder}
+                outlet={outlet} // Pass outlet info from store
+                onClose={() => setShowSuccess(false)}
+                onNewOrder={handleNewOrder}
+            />
         </div>
     );
 }
@@ -358,9 +382,14 @@ function InventoryPanel({ tenantId, outletId }: { tenantId: string; outletId: st
 
 // ============= SETTINGS PANEL =============
 function SettingsPanel({ user }: { user: any }) {
+    const { products, error: storeError, fetchMenu } = usePOSStore();
     const [cacheStats, setCacheStats] = useState<{ keys: number; lastSync: string } | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
+
+    // Debug Data
+    const tenantId = (user?.publicMetadata?.tenantId as string) || "MISSING";
+    const outletId = (user?.publicMetadata?.outletId as string) || "MISSING";
 
     useEffect(() => {
         const load = async () => {
@@ -384,42 +413,73 @@ function SettingsPanel({ user }: { user: any }) {
         const { OfflineStore } = await import("@/lib/offline-store");
         await OfflineStore.clearAll();
         setCacheStats(await OfflineStore.getStats());
-        alert("Cache cleared");
+        alert("Cache cleared. Please reload.");
     };
 
     return (
         <div className="h-full flex flex-col bg-gray-50">
             <div className="bg-white border-b p-4"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Settings size={24} className="text-gray-500" />Settings</h2></div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+                {/* Debug Info (Temporary) */}
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs font-mono">
+                    <h3 className="font-bold text-red-700 mb-2 flex items-center gap-2"><AlertTriangle size={14} /> Debug Info</h3>
+                    <div className="grid grid-cols-2 gap-2 text-red-600">
+                        <div>Tenant: {tenantId}</div>
+                        <div>Outlet: {outletId}</div>
+                        <div>Products: {products.length}</div>
+                        <div>Store Error: {storeError || "None"}</div>
+                        <div>User Loaded: {user ? "Yes" : "No"}</div>
+                    </div>
+                    <button onClick={() => fetchMenu({ tenantId, outletId })} className="mt-2 text-red-700 underline">Force Retry Fetch</button>
+                </div>
+
+                {/* Connection Status */}
                 <div className={`rounded-xl p-4 border ${isOnline ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
                     <div className="flex items-center gap-3">
                         {isOnline ? <Wifi size={24} className="text-green-600" /> : <WifiOff size={24} className="text-yellow-600" />}
                         <div><h3 className="font-bold">{isOnline ? 'Online' : 'Offline'}</h3><p className="text-sm text-gray-600">{isOnline ? 'Connected' : 'Using cached data'}</p></div>
                     </div>
                 </div>
+
+                {/* Account */}
                 <div className="bg-white rounded-xl p-4 border border-gray-100">
                     <h3 className="font-bold mb-3">Account</h3>
                     <div className="space-y-2 text-sm">
                         <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="font-medium">{user?.fullName || 'N/A'}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">Email</span><span className="font-medium text-xs">{user?.primaryEmailAddress?.emailAddress || 'N/A'}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Role</span><span className="font-medium text-xs capitalize">{user?.publicMetadata?.role as string || 'N/A'}</span></div>
                     </div>
                 </div>
+
+                {/* Printer Settings (Placeholder) */}
+                <div className="bg-white rounded-xl p-4 border border-gray-100 opacity-60">
+                    <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-400"><Info size={18} /> Printer Setup <span className="text-[10px] bg-gray-100 px-2 rounded">Coming Soon</span></h3>
+                </div>
+
+                {/* Tax Settings */}
+                <div className="bg-white rounded-xl p-4 border border-gray-100">
+                    <h3 className="font-bold mb-3 flex items-center gap-2"><Info size={18} /> Tax Configuration</h3>
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500">Default Tax Rate (%)</span>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setTaxRate(Math.max(0, taxRate - 1))} className="p-1 bg-gray-100 rounded hover:bg-gray-200 text-gray-700 font-bold w-8 h-8">-</button>
+                            <span className="font-mono font-bold w-8 text-center">{taxRate}%</span>
+                            <button onClick={() => setTaxRate(taxRate + 1)} className="p-1 bg-gray-100 rounded hover:bg-gray-200 text-gray-700 font-bold w-8 h-8">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Data Management */}
                 <div className="bg-white rounded-xl p-4 border border-gray-100">
                     <h3 className="font-bold mb-3 flex items-center gap-2"><Database size={18} />Offline Data</h3>
                     <div className="space-y-2 text-sm mb-4">
-                        <div className="flex justify-between"><span className="text-gray-500">Cached</span><span className="font-medium">{cacheStats?.keys || 0}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Cached Items</span><span className="font-medium">{cacheStats?.keys || 0}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">Last Sync</span><span className="font-medium text-xs">{cacheStats?.lastSync || 'Never'}</span></div>
                     </div>
                     <div className="flex gap-3">
                         <button onClick={sync} disabled={isSyncing} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-medium disabled:opacity-50"><RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />{isSyncing ? 'Syncing' : 'Sync'}</button>
-                        <button onClick={clear} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-medium"><Trash2 size={16} />Clear</button>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-4 border border-gray-100">
-                    <h3 className="font-bold mb-3 flex items-center gap-2"><Info size={18} />About</h3>
-                    <div className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">Version</span><span className="font-medium">1.0.0</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Build</span><span className="font-medium">Enterprise</span></div>
+                        <button onClick={clear} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-medium"><Trash2 size={16} />Clear Cache</button>
                     </div>
                 </div>
             </div>
@@ -430,6 +490,7 @@ function SettingsPanel({ user }: { user: any }) {
 // ============= MAIN POS SHELL =============
 export function POSShell() {
     const { user, isLoaded } = useUser();
+    const { outlet } = usePOSStore(); // Get outlet from store for shop name
     const [activePanel, setActivePanel] = useState<PanelType>('menu');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
@@ -465,6 +526,13 @@ export function POSShell() {
                 <div className="p-4 border-b border-gray-100">
                     <h1 className="text-xl font-bold text-gray-900 lg:block hidden">Beloop<span className="text-rose-600">.</span></h1>
                     <div className="lg:hidden flex justify-center"><span className="text-2xl font-bold text-rose-600">B</span></div>
+                    {/* Outlet Info */}
+                    <div className="mt-4 hidden lg:block">
+                        <div className="flex items-center gap-2 text-gray-700 font-medium">
+                            <Store size={16} className="text-rose-500" />
+                            <span className="truncate">{outlet?.name || "Loading..."}</span>
+                        </div>
+                    </div>
                 </div>
                 <nav className="flex-1 p-2 space-y-1">
                     {navItems.map((item) => {
@@ -477,6 +545,17 @@ export function POSShell() {
                     })}
                 </nav>
                 <div className="p-4 border-t border-gray-100 space-y-3">
+                    {/* User Info */}
+                    <div className="hidden lg:flex items-center gap-3 px-2 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold">
+                            {user?.firstName?.[0] || <User size={16} />}
+                        </div>
+                        <div className="overflow-hidden">
+                            <p className="text-sm font-bold text-gray-900 truncate">{user?.fullName || "Staff"}</p>
+                            <p className="text-xs text-gray-500 capitalize truncate">{(user?.publicMetadata?.role as string) || "Employee"}</p>
+                        </div>
+                    </div>
+
                     <div className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${isOnline ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
                         {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}<span className="hidden lg:block">{isOnline ? 'Online' : 'Offline'}</span>
                     </div>
@@ -487,7 +566,10 @@ export function POSShell() {
             {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b px-4 py-3 flex justify-between items-center">
                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2" aria-label="Menu"><Menu size={24} className="text-gray-700" /></button>
-                <h1 className="text-lg font-bold text-gray-900">Beloop<span className="text-rose-600">.</span></h1>
+                <div className="flex flex-col items-center">
+                    <h1 className="text-lg font-bold text-gray-900">Beloop<span className="text-rose-600">.</span></h1>
+                    <span className="text-xs text-gray-500">{outlet?.name}</span>
+                </div>
                 <div className={`p-2 rounded-full ${isOnline ? 'bg-green-100' : 'bg-yellow-100'}`}>{isOnline ? <Wifi size={16} className="text-green-600" /> : <WifiOff size={16} className="text-yellow-600" />}</div>
             </div>
 
@@ -496,18 +578,35 @@ export function POSShell() {
                 {isSidebarOpen && (
                     <>
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="md:hidden fixed inset-0 bg-black/50 z-50" onClick={() => setIsSidebarOpen(false)} />
-                        <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 25 }} className="md:hidden fixed left-0 top-0 bottom-0 w-72 bg-white z-50 shadow-2xl">
-                            <div className="p-4 border-b flex justify-between items-center">
-                                <h1 className="text-xl font-bold text-gray-900">Beloop<span className="text-rose-600">.</span></h1>
+                        <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 25 }} className="md:hidden fixed left-0 top-0 bottom-0 w-72 bg-white z-50 shadow-2xl flex flex-col">
+                            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                                <div>
+                                    <h1 className="text-xl font-bold text-gray-900">Beloop<span className="text-rose-600">.</span></h1>
+                                    <div className="flex items-center gap-2 mt-1 text-gray-600 text-sm">
+                                        <Store size={14} />
+                                        <span>{outlet?.name || "Loading..."}</span>
+                                    </div>
+                                </div>
                                 <button onClick={() => setIsSidebarOpen(false)} className="p-2" aria-label="Close"><X size={24} className="text-gray-500" /></button>
                             </div>
-                            <nav className="p-4 space-y-2">
+
+                            <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-lg">
+                                    {user?.firstName?.[0] || <User size={20} />}
+                                </div>
+                                <div>
+                                    <p className="font-bold text-gray-900">{user?.fullName || "Staff"}</p>
+                                    <p className="text-xs text-gray-500 capitalize">{(user?.publicMetadata?.role as string) || "Employee"}</p>
+                                </div>
+                            </div>
+
+                            <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                                 {navItems.map((item) => {
                                     const Icon = item.icon, isActive = activePanel === item.id;
                                     return <button key={item.id} onClick={() => { setActivePanel(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${isActive ? 'bg-rose-50 text-rose-600' : 'text-gray-600 hover:bg-gray-50'}`}><Icon size={22} /><span>{item.label}</span></button>;
                                 })}
                             </nav>
-                            <div className="absolute bottom-0 left-0 right-0 p-4 border-t"><SignOutButton><button className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl"><LogOut size={20} /><span className="font-medium">Logout</span></button></SignOutButton></div>
+                            <div className="p-4 border-t"><SignOutButton><button className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl"><LogOut size={20} /><span className="font-medium">Logout</span></button></SignOutButton></div>
                         </motion.aside>
                     </>
                 )}
