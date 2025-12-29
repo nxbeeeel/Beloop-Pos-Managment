@@ -48,14 +48,24 @@ export const CartItem = ({ item }: CartItemProps) => {
             </div>
 
             {/* Modifiers (Placeholder) */}
-            {item.modifiers && Object.keys(item.modifiers).length > 0 && (
+            {/* Modifiers */}
+            {item.modifiers && (
                 <div className="text-xs text-gray-500 mb-2 space-y-1">
-                    {Object.entries(item.modifiers).map(([key, value]) => (
-                        <div key={key} className="flex items-center gap-1">
-                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                            <span>{String(value)}</span>
+                    {/* Priority: Show generated text summary if available */}
+                    {item.modifiers._text ? (
+                        <div className="flex items-start gap-1">
+                            <span className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 shrink-0" />
+                            <span className="font-medium text-gray-600 italic">{item.modifiers._text}</span>
                         </div>
-                    ))}
+                    ) : (
+                        /* Fallback: Show key-values (excluding specific keys if needed) */
+                        Object.entries(item.modifiers).map(([key, value]) => (
+                            <div key={key} className="flex items-center gap-1">
+                                <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                                <span>{String(value)}</span>
+                            </div>
+                        ))
+                    )}
                 </div>
             )}
 

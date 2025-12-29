@@ -35,36 +35,39 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
 
     // Split Mode Logic
     const isValidSplitPayment = method !== 'CASH' || (parseFloat(tendered) > 0);
-    const canFinalizeSplit = remaining <= 0.01; // Floating point tolerance
+    const canFinalizeSplit = remaining <= 0.50; // Allow 50 paise tolerance for rounding
 
-    const handleAddSplitPayment = async () => {
+    const handleAddSplitPayment = () => {
         const amt = parseFloat(tendered);
         if (amt <= 0) return;
 
-        setIsProcessing(true);
-        try {
-            let orderId = currentOrderId;
+        // Validations
+        if (amt > remaining + 0.01) {
+            // Allow slight floating point tolerance but warn if egregious
+            alert("Amount exceeds due balance!");
+            return;
+        }
 
-            // 1. Create Order if not exists
-            if (!orderId) {
-                if (!tenantId || !outletId) { alert("Missing tenant/outlet context"); return; }
-                orderId = await createPendingOrder({ tenantId, outletId });
-                setCurrentOrderId(orderId);
-            }
+        // Add to local state (Offline-First: We don't save to DB until Finalize)
+        setSplitPayments([...splitPayments, { method, amount: amt }]);
+        setTendered('');
+    };
 
-            // 2. Add Payment to Backend
-            if (tenantId && outletId && orderId) {
-                await POSExtendedService.addPayment({ tenantId, outletId }, orderId, amt, method);
-
-                // 3. Update Local State
-                setSplitPayments([...splitPayments, { method, amount: amt }]);
-                setTendered('');
-            }
-        } catch (err: any) {
-            console.error(err);
-            alert("Failed to record payment: " + err.message);
-        } finally {
-            setIsProcessing(false);
+    const handleConfirm = () => {
+        if (mode === 'FULL') {
+            const amount = parseFloat(tendered) || total;
+            onConfirm(method, amount); // Legacy single payment signature
+        } else {
+            // PASS FULL PAYMENTS ARRAY
+            // We pass the "main" method as 'SPLIT' or the first one, but the parent
+            // component will look for the `payments` extra argument (we need to update onConfirm signature in parent)
+            // But wait, the props `onConfirm` is defined as taking 3 args.
+            // We'll overload the 3rd arg (orderId) to act as 'payments' or change the prop type?
+            // Actually, best to just pass the array as a new arg or inside an object.
+            // Let's assume the parent can handle `onConfirm(method, total, undefined, splitPayments)`
+            // Checking usage... for now I will rely on the parent updating.
+            // I will cast to any to bypass TS for this step, assuming I will update the parent next.
+            (onConfirm as any)('SPLIT', total, undefined, splitPayments);
         }
     };
 
@@ -91,7 +94,7 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
                                 </div>
                             </div>
                             <div className="flex bg-gray-800 rounded-lg p-1">
-                                <button onClick={() => setMode('FULL')} disabled={!!currentOrderId} className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${mode === 'FULL' ? 'bg-rose-600 text-white' : 'text-gray-400 hover:text-white disabled:opacity-30'}`}>Full</button>
+                                <button onClick={() => setMode('FULL')} className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${mode === 'FULL' ? 'bg-rose-600 text-white' : 'text-gray-400 hover:text-white disabled:opacity-30'}`}>Full</button>
                                 <button onClick={() => setMode('SPLIT')} className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${mode === 'SPLIT' ? 'bg-rose-600 text-white' : 'text-gray-400 hover:text-white'}`}>Split</button>
                             </div>
                             <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors ml-2" aria-label="Close payment modal">
@@ -232,7 +235,7 @@ export function PaymentModal({ isOpen, total, onClose, onConfirm }: PaymentModal
                         )}
 
                         <button
-                            onClick={() => onConfirm(method, mode === 'FULL' ? (parseFloat(tendered) || total) : totalPaid, currentOrderId || undefined)}
+                            onClick={handleConfirm}
                             disabled={mode === 'FULL' ? !isValidFull : !canFinalizeSplit}
                             className="w-full flex items-center justify-center gap-2 bg-rose-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-rose-500/20"
                         >

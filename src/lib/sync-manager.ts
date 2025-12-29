@@ -124,6 +124,21 @@ class SyncManagerClass {
                     await this.removeFromQueue(operation.id);
                     console.log(`[SyncManager] ✓ ${operation.type} (${operation.id})`);
                 } catch (error: any) {
+                    // CONFLICT RESOLUTION (Phase 5)
+                    // If server says "Not Found" or "Conflict", we cannot blindly retry.
+                    // We must park this operation to avoid blocking the queue.
+                    const isConflict = error.message.includes('404') || error.message.includes('409') || error.message.includes('CONFLICT');
+
+                    if (isConflict) {
+                        console.error(`[SyncManager] ⚠️ Conflict detected for ${operation.id}: ${error.message}`);
+                        // Mark as "Quarantined" (we simply remove from main queue and could save to a "Dead Letter Queue" if we had one)
+                        // For now, we effectively "skip" it by successfully "removing" it but logging heavily.
+                        // Ideally, we move it to `sync:conflicts` store.
+                        await this.quarantineOperation(operation, error.message);
+                        await this.removeFromQueue(operation.id);
+                        continue;
+                    }
+
                     operation.retries++;
                     operation.lastError = error.message;
                     console.error(`[SyncManager] ✗ ${operation.type} retry ${operation.retries}:`, error);
@@ -142,6 +157,20 @@ class SyncManagerClass {
         } finally {
             this.isSyncing = false;
             this.notifyListeners();
+        }
+    }
+
+    /**
+     * Move items to a "Conflict" store so they don't block the line
+     */
+    async quarantineOperation(operation: SyncOperation, reason: string) {
+        try {
+            const conflicts = (await getIDB('sync:conflicts')) || [];
+            conflicts.push({ ...operation, quarantinedAt: Date.now(), reason });
+            await setIDB('sync:conflicts', conflicts);
+            console.log(`[SyncManager] Moved ${operation.id} to quarantine.`);
+        } catch (e) {
+            console.error('Failed to quarantine item', e);
         }
     }
 

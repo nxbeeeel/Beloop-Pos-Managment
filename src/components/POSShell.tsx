@@ -36,12 +36,20 @@ const navItems: NavItem[] = [
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
+import { PinPadModal } from "@/components/PinPadModal";
+import { CustomerSearchModal } from "@/components/CustomerSearchModal";
+import { PrinterStatus } from "@/components/PrinterStatus";
+import { SyncStatus } from "@/components/SyncStatus";
+// ...
+
 export function POSShell() {
     const { user, isLoaded } = useUser();
-    const { outlet } = usePOSStore(); // Get outlet from store for shop name
+    const { outlet, activeStaff, setActiveStaff } = usePOSStore(); // Get outlet from store for shop name
     const [activePanel, setActivePanel] = useState<PanelType>('menu');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
+    const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
     const tenantId = (user?.publicMetadata?.tenantId as string) || "";
     const outletId = (user?.publicMetadata?.outletId as string) || "";
@@ -105,6 +113,21 @@ export function POSShell() {
         return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
     }, []);
 
+    const handlePinSuccess = (pin: string) => {
+        // Mock Validation for Demo
+        // In real app: validate against hashed PINs in settings or local DB
+        if (pin === '1234') {
+            setActiveStaff({ id: 'u1', name: 'Manager Mike', role: 'Manager' });
+            setIsPinModalOpen(false);
+        } else if (pin === '5678') {
+            setActiveStaff({ id: 'u2', name: 'Server Sarah', role: 'Staff' });
+            setIsPinModalOpen(false);
+        } else {
+            // Shake effect handled by modal if we pass error prop back, but for now just alert
+            alert("Invalid PIN (Try 1234 or 5678)");
+        }
+    };
+
     if (!isLoaded || isAuthenticating) return <div className="flex h-screen items-center justify-center bg-gray-50 flex-col gap-4"><div className="animate-spin rounded-full h-12 w-12 border-4 border-rose-500 border-t-transparent" /><p className="text-gray-500 font-medium">Authenticating...</p></div>;
 
     const renderPanel = () => {
@@ -143,17 +166,44 @@ export function POSShell() {
                             </button>
                         );
                     })}
+
+                    {/* Customer Lookup Button */}
+                    <button
+                        onClick={() => setIsCustomerModalOpen(true)}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition-all mt-4"
+                    >
+                        <User size={22} className="text-gray-500" />
+                        <span className="hidden lg:block">Customer</span>
+                    </button>
                 </nav>
                 <div className="p-4 border-t border-gray-100 space-y-3">
                     {/* User Info */}
-                    <div className="hidden lg:flex items-center gap-3 px-2 mb-2">
-                        <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold">
-                            {user?.firstName?.[0] || <User size={16} />}
+                    <div className="hidden lg:flex items-center justify-between px-2 mb-2 bg-gray-50 p-2 rounded-xl">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold shrink-0">
+                                {activeStaff ? activeStaff.name[0] : (user?.firstName?.[0] || <User size={16} />)}
+                            </div>
+                            <div className="overflow-hidden">
+                                <p className="text-sm font-bold text-gray-900 truncate">
+                                    {activeStaff ? activeStaff.name : (user?.fullName || "Staff")}
+                                </p>
+                                <p className="text-xs text-gray-500 capitalize truncate">
+                                    {activeStaff ? activeStaff.role : ((user?.publicMetadata?.role as string) || "Employee")}
+                                </p>
+                            </div>
                         </div>
-                        <div className="overflow-hidden">
-                            <p className="text-sm font-bold text-gray-900 truncate">{user?.fullName || "Staff"}</p>
-                            <p className="text-xs text-gray-500 capitalize truncate">{(user?.publicMetadata?.role as string) || "Employee"}</p>
-                        </div>
+                        <button
+                            onClick={() => setIsPinModalOpen(true)}
+                            className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-rose-600 transition-colors shadow-sm"
+                            title="Switch User"
+                        >
+                            <Users size={16} />
+                        </button>
+                    </div>
+
+                    <div className="hidden lg:block px-3 mb-2 space-y-2">
+                        <SyncStatus />
+                        <PrinterStatus />
                     </div>
 
                     <div className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${isOnline ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
@@ -228,6 +278,18 @@ export function POSShell() {
                     })}
                 </div>
             </nav>
+
+            <PinPadModal
+                isOpen={isPinModalOpen}
+                onClose={() => setIsPinModalOpen(false)}
+                onSuccess={handlePinSuccess}
+                title="Switch Staff User"
+            />
+
+            <CustomerSearchModal
+                isOpen={isCustomerModalOpen}
+                onClose={() => setIsCustomerModalOpen(false)}
+            />
         </div>
     );
 }
