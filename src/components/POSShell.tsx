@@ -82,6 +82,16 @@ export function POSShell() {
 
                     if (result.success) {
                         console.log("[POS Shell] Auth Success", result);
+                        // Save outlet info to store immediately (even if menu is empty)
+                        if (result.outlet) {
+                            usePOSStore.setState({
+                                outlet: {
+                                    name: result.outlet.name,
+                                    address: result.outlet.address || '',
+                                    phone: result.outlet.phone || ''
+                                }
+                            });
+                        }
                     } else {
                         console.error("[POS Shell] Auth Failed", result.error);
                         alert("Failed to authenticate with POS server: " + result.error);
