@@ -30,13 +30,29 @@ export default function MenuPanel({ tenantId, outletId }: MenuPanelProps) {
     const [lastOrder, setLastOrder] = useState<any>(null);
 
     useEffect(() => {
-        // Only fetch if we have IDs
-        if (tenantId && outletId) {
-            console.log("MenuPanel mounting, fetching menu for:", tenantId, outletId);
+        // Only fetch if we have IDs AND we're authenticated
+        const initMenu = async () => {
+            if (!tenantId || !outletId) {
+                console.warn("MenuPanel mounted but missing context:", { tenantId, outletId });
+                return;
+            }
+
+            // Wait for POS auth to complete before fetching
+            const { isAuthenticated } = await import('@/services/pos-auth');
+            if (!isAuthenticated()) {
+                console.log("[MenuPanel] Waiting for auth before fetching menu...");
+                // Retry after a short delay if not authenticated yet
+                const retryTimer = setTimeout(() => {
+                    initMenu();
+                }, 1000);
+                return () => clearTimeout(retryTimer);
+            }
+
+            console.log("MenuPanel fetching menu for:", tenantId, outletId);
             fetchMenu({ tenantId, outletId });
-        } else {
-            console.warn("MenuPanel mounted but missing context:", { tenantId, outletId });
-        }
+        };
+
+        initMenu();
 
         const handleOpenPayment = () => setShowPayment(true);
         document.addEventListener('open-payment', handleOpenPayment);
