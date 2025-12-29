@@ -6,15 +6,18 @@ import { useUser, SignOutButton } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Home, ShoppingBag, History, Package, Users, ChefHat,
-    Settings, LogOut, Menu, X, Wifi, WifiOff, Loader2,
-    Clock, Search, RefreshCw, Trash2, Database, Info, AlertTriangle,
-    CheckCircle, Plus, Store, User
+    Settings, LogOut, Menu, X, Wifi, WifiOff, Store, User
 } from "lucide-react";
 
 import { usePOSStore } from "@/lib/store";
-import { MenuGrid } from "@/components/MenuGrid";
-import { CartContent } from "@/components/CartContent";
-import { PaymentModal } from "@/components/PaymentModal";
+
+// Import Panels
+import MenuPanel from "@/components/pos/MenuPanel";
+import { OrdersPanel } from "@/components/pos/OrdersPanel";
+import { TablesPanel } from "@/components/pos/TablesPanel";
+import { KitchenPanel } from "@/components/pos/KitchenPanel";
+import { InventoryPanel } from "@/components/pos/InventoryPanel";
+import { SettingsPanel } from "@/components/pos/SettingsPanel";
 
 export type PanelType = 'menu' | 'orders' | 'tables' | 'kitchen' | 'inventory' | 'settings';
 
@@ -33,357 +36,6 @@ const navItems: NavItem[] = [
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-import { PaymentSuccessModal } from "@/components/PaymentSuccessModal";
-
-// ============= MENU PANEL =============
-function MenuPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
-    const { cart, products, categories, isLoading, error, fetchMenu, total, checkout, outlet } = usePOSStore();
-    const [showPayment, setShowPayment] = useState(false);
-    const [showSuccess, setShowSuccess] = useState(false);
-    const [lastOrder, setLastOrder] = useState<any>(null);
-
-    useEffect(() => {
-        if (tenantId && outletId) fetchMenu({ tenantId, outletId });
-
-        const handleOpenPayment = () => setShowPayment(true);
-        document.addEventListener('open-payment', handleOpenPayment);
-        return () => document.removeEventListener('open-payment', handleOpenPayment);
-    }, [tenantId, outletId, fetchMenu]);
-
-    const handleCheckout = async (method: string, tendered: number, orderId?: string) => {
-        const result = await checkout(method, tendered, { tenantId, outletId }, orderId);
-        if (result) {
-            setLastOrder(result);
-            setShowPayment(false);
-            setShowSuccess(true);
-        }
-    };
-
-    const handleNewOrder = () => {
-        setShowSuccess(false);
-        setLastOrder(null);
-    };
-
-    if (isLoading && products.length === 0) {
-        return <div className="flex h-full items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-rose-500" /></div>;
-    }
-
-    if (error) {
-        return (
-            <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-                <p className="text-red-500 text-center">{error}</p>
-                <button onClick={() => fetchMenu({ tenantId, outletId })} className="px-4 py-2 bg-rose-600 text-white rounded-lg">Retry</button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex h-full">
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-                <MenuGrid categories={categories} items={products} onEditItem={() => { }} />
-            </div>
-            <aside className="hidden lg:flex w-96 bg-white border-l border-gray-200 flex-col">
-                <div className="p-4 border-b border-gray-100">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <ShoppingBag size={20} className="text-rose-500" />Current Order
-                    </h2>
-                </div>
-                <div className="flex-1 overflow-y-auto"><CartContent /></div>
-                {cart.length > 0 && (
-                    <div className="p-4 border-t border-gray-100 space-y-3">
-                        <div className="flex justify-between text-lg font-bold">
-                            <span>Total</span><span className="text-rose-600">₹{total().toFixed(2)}</span>
-                        </div>
-                        <button onClick={() => setShowPayment(true)} className="w-full py-4 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700">Checkout</button>
-                    </div>
-                )}
-            </aside>
-            <PaymentModal isOpen={showPayment} total={total()} onClose={() => setShowPayment(false)} onConfirm={handleCheckout} />
-            <PaymentSuccessModal
-                isOpen={showSuccess}
-                order={lastOrder}
-                outlet={outlet} // Pass outlet info from store
-                onClose={() => setShowSuccess(false)}
-                onNewOrder={handleNewOrder}
-            />
-        </div>
-    );
-}
-
-// ============= ORDERS PANEL =============
-function OrdersPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
-    const { orders } = usePOSStore();
-    const [serverOrders, setServerOrders] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [search, setSearch] = useState("");
-
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const { get: getIDB, set: setIDB } = await import('idb-keyval');
-                const cached = await getIDB('offline:orders_history');
-                if (cached) { setServerOrders(cached as any[]); setIsLoading(false); }
-                if (navigator.onLine && tenantId && outletId) {
-                    const { POSExtendedService } = await import('@/services/pos-extended');
-                    const data = await POSExtendedService.getOrders({ tenantId, outletId });
-                    setServerOrders(data); await setIDB('offline:orders_history', data);
-                }
-            } catch (err) { console.error(err); } finally { setIsLoading(false); }
-        };
-        if (tenantId && outletId) load();
-    }, [tenantId, outletId]);
-
-    const allOrders = [...orders, ...serverOrders]
-        .reduce((acc, o) => { if (!acc.find((x: any) => x.id === o.id)) acc.push(o); return acc; }, [] as any[])
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const todayOrders = allOrders.filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString());
-    const todayTotal = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const filtered = search ? allOrders.filter(o => o.id.includes(search)) : allOrders;
-
-    return (
-        <div className="h-full flex flex-col bg-gray-50">
-            <div className="bg-white border-b p-4">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Order History</h2>
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="bg-rose-50 rounded-xl p-3"><p className="text-xs text-gray-600">Today</p><p className="text-xl font-bold text-rose-600">{todayOrders.length}</p></div>
-                    <div className="bg-green-50 rounded-xl p-3"><p className="text-xs text-gray-600">Revenue</p><p className="text-xl font-bold text-green-600">₹{todayTotal.toFixed(0)}</p></div>
-                    <div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-gray-600">Avg</p><p className="text-xl font-bold text-blue-600">₹{todayOrders.length ? (todayTotal / todayOrders.length).toFixed(0) : 0}</p></div>
-                </div>
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl" />
-                </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {isLoading ? <div className="flex justify-center py-12"><Loader2 className="animate-spin text-rose-500" /></div> :
-                    filtered.length === 0 ? <div className="text-center py-12 text-gray-500"><History size={48} className="mx-auto mb-4 opacity-30" /><p>No orders</p></div> :
-                        filtered.map(o => (
-                            <div key={o.id} className="bg-white rounded-xl p-4 border border-gray-100">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="font-bold">#{o.id.slice(-6)}</span>
-                                    <span className="font-bold text-rose-600">₹{(o.total || 0).toFixed(2)}</span>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm text-gray-500">
-                                    <span className="flex items-center gap-1"><Clock size={14} />{new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                    <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{o.paymentMethod}</span>
-                                </div>
-                            </div>
-                        ))}
-            </div>
-        </div>
-    );
-}
-
-// ============= TABLES PANEL =============
-function TablesPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
-    const [tables, setTables] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [showNew, setShowNew] = useState(false);
-    const [newNum, setNewNum] = useState("");
-
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const { get: getIDB, set: setIDB } = await import('idb-keyval');
-                const cached = await getIDB('offline:tables');
-                if (cached) { setTables(cached as any[]); setIsLoading(false); }
-                if (navigator.onLine && tenantId && outletId) {
-                    const { POSExtendedService } = await import('@/services/pos-extended');
-                    const data = await POSExtendedService.getOpenTables({ tenantId, outletId });
-                    setTables(data); await setIDB('offline:tables', data);
-                }
-            } catch (err) { console.error(err); } finally { setIsLoading(false); }
-        };
-        if (tenantId && outletId) load();
-    }, [tenantId, outletId]);
-
-    const openTable = async () => {
-        if (!newNum.trim()) return;
-        try {
-            const { POSExtendedService } = await import('@/services/pos-extended');
-            await POSExtendedService.openTable({ tenantId, outletId }, newNum);
-            setNewNum(""); setShowNew(false);
-            const data = await POSExtendedService.getOpenTables({ tenantId, outletId });
-            setTables(data);
-        } catch (err: any) { alert(err.message); }
-    };
-
-    const slots = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
-    const getTable = (n: string) => tables.find(t => t.tableNumber === n);
-
-    if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-rose-500" /></div>;
-
-    return (
-        <div className="h-full flex flex-col bg-gray-50">
-            <div className="bg-white border-b p-4 flex justify-between items-center">
-                <div><h2 className="text-xl font-bold text-gray-900">Tables</h2><p className="text-sm text-gray-500">{tables.length} active</p></div>
-                <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 text-white rounded-xl font-bold"><Plus size={20} />Open</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                    {slots.map(n => {
-                        const t = getTable(n);
-                        return (
-                            <button key={n} onClick={() => !t && (setNewNum(n), setShowNew(true))} className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 ${t ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                <div className={`text-3xl font-bold ${t ? 'text-rose-600' : 'text-gray-300'}`}>{n}</div>
-                                {t ? <div className="text-sm font-bold text-gray-900">₹{Number(t.totalAmount || 0).toFixed(0)}</div> : <div className="text-xs text-gray-400">Available</div>}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-            <AnimatePresence>
-                {showNew && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4 space-y-4">
-                            <h3 className="text-xl font-bold">Open Table</h3>
-                            <input type="text" placeholder="Table #" value={newNum} onChange={(e) => setNewNum(e.target.value)} className="w-full px-4 py-3 border rounded-xl" autoFocus />
-                            <div className="flex gap-3">
-                                <button onClick={() => setShowNew(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold">Cancel</button>
-                                <button onClick={openTable} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold">Open</button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-}
-
-// ============= KITCHEN PANEL =============
-function KitchenPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
-    const [orders, setOrders] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const { get: getIDB, set: setIDB } = await import('idb-keyval');
-                const cached = await getIDB('offline:kitchen');
-                if (cached) { setOrders(cached as any[]); setIsLoading(false); }
-                if (navigator.onLine && tenantId && outletId) {
-                    const { POSExtendedService } = await import('@/services/pos-extended');
-                    const data = await POSExtendedService.getKitchenOrders({ tenantId, outletId });
-                    setOrders(data); await setIDB('offline:kitchen', data);
-                }
-            } catch (err) { console.error(err); } finally { setIsLoading(false); }
-        };
-        if (tenantId && outletId) { load(); const i = setInterval(() => navigator.onLine && load(), 15000); return () => clearInterval(i); }
-    }, [tenantId, outletId]);
-
-    const bump = async (id: string, status: string) => {
-        const next = status === 'NEW' ? 'PREPARING' : 'READY';
-        try {
-            const { POSExtendedService } = await import('@/services/pos-extended');
-            await POSExtendedService.updateKitchenStatus({ tenantId, outletId }, id, next as any);
-            const data = await POSExtendedService.getKitchenOrders({ tenantId, outletId });
-            setOrders(data);
-        } catch (err) { console.error(err); }
-    };
-
-    const elapsed = (t: string) => Math.floor((Date.now() - new Date(t).getTime()) / 60000);
-
-    if (isLoading) return <div className="flex h-full items-center justify-center bg-gray-900"><Loader2 className="animate-spin text-orange-500" /></div>;
-
-    return (
-        <div className="h-full flex flex-col bg-gray-900 text-white">
-            <div className="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
-                <h2 className="text-xl font-bold flex items-center gap-2"><ChefHat className="text-orange-500" />Kitchen</h2>
-                <div className="flex gap-2">
-                    <span className="bg-red-600 px-3 py-1 rounded-full text-sm font-bold">{orders.filter(o => o.kitchenStatus === 'NEW').length} New</span>
-                    <span className="bg-green-600 px-3 py-1 rounded-full text-sm font-bold">{orders.filter(o => o.kitchenStatus === 'READY').length} Ready</span>
-                </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-                {orders.length === 0 ? <div className="text-center py-20 text-gray-500"><ChefHat size={64} className="mx-auto mb-4 opacity-30" /><p>No orders</p></div> :
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {orders.filter(o => o.kitchenStatus !== 'SERVED').map(o => {
-                            const isNew = o.kitchenStatus === 'NEW', isReady = o.kitchenStatus === 'READY';
-                            return (
-                                <div key={o.id} className={`rounded-xl overflow-hidden ${isNew ? 'bg-red-600 animate-pulse' : isReady ? 'bg-green-700' : 'bg-gray-800'}`}>
-                                    <div className="p-3 flex justify-between border-b border-white/10">
-                                        <span className="font-bold">{o.tableNumber ? `T${o.tableNumber}` : `#${o.id.slice(-4)}`}</span>
-                                        <span className="text-sm">{elapsed(o.createdAt)}m</span>
-                                    </div>
-                                    <div className="p-3 space-y-1 max-h-24 overflow-y-auto">
-                                        {(o.items || []).map((i: any, idx: number) => <div key={idx}><span className="text-orange-300 font-bold mr-2">{i.quantity}x</span>{i.name}</div>)}
-                                    </div>
-                                    {!isReady && <button onClick={() => bump(o.id, o.kitchenStatus)} className={`w-full py-3 font-bold flex items-center justify-center gap-2 ${isNew ? 'bg-white text-red-600' : 'bg-green-600'}`}><CheckCircle size={18} />{isNew ? 'Start' : 'Ready'}</button>}
-                                </div>
-                            );
-                        })}
-                    </div>
-                }
-            </div>
-        </div>
-    );
-}
-
-// ============= INVENTORY PANEL =============
-function InventoryPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
-    const [products, setProducts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const { get: getIDB, set: setIDB } = await import('idb-keyval');
-                const cached = await getIDB('offline:inventory');
-                if (cached) { setProducts(cached as any[]); setLoading(false); }
-                if (navigator.onLine && tenantId && outletId) {
-                    const { POSExtendedService } = await import('@/services/pos-extended');
-                    const data = await POSExtendedService.getInventory({ tenantId, outletId });
-                    setProducts(Array.isArray(data) ? data : []); await setIDB('offline:inventory', data);
-                }
-            } catch (err) { console.error(err); } finally { setLoading(false); }
-        };
-        if (tenantId && outletId) load();
-    }, [tenantId, outletId]);
-
-    const low = products.filter(p => (p.stock || 0) > 0 && (p.stock || 0) <= (p.reorderLevel || 5));
-    const out = products.filter(p => (p.stock || 0) === 0);
-    const filtered = products.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()));
-
-    if (loading) return <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-rose-500" /></div>;
-
-    return (
-        <div className="h-full flex flex-col bg-gray-50">
-            <div className="bg-white border-b p-4 space-y-4">
-                <h2 className="text-xl font-bold text-gray-900">Inventory</h2>
-                <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-gray-600">Total</p><p className="text-xl font-bold text-blue-600">{products.length}</p></div>
-                    <div className="bg-yellow-50 rounded-xl p-3"><p className="text-xs text-gray-600">Low</p><p className="text-xl font-bold text-yellow-600">{low.length}</p></div>
-                    <div className="bg-red-50 rounded-xl p-3"><p className="text-xs text-gray-600">Out</p><p className="text-xl font-bold text-red-600">{out.length}</p></div>
-                </div>
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl" />
-                </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {filtered.map(p => {
-                    const isLow = (p.stock || 0) > 0 && (p.stock || 0) <= (p.reorderLevel || 5), isOut = (p.stock || 0) === 0;
-                    return (
-                        <div key={p.id} className={`bg-white rounded-xl p-4 border ${isOut ? 'border-red-300 bg-red-50' : isLow ? 'border-yellow-300 bg-yellow-50' : 'border-gray-100'}`}>
-                            <div className="flex justify-between items-start">
-                                <div><h3 className="font-semibold text-gray-900">{p.name}</h3><p className="text-sm text-gray-500">{p.sku}</p></div>
-                                <div className="text-right"><p className={`text-2xl font-bold ${isOut ? 'text-red-600' : isLow ? 'text-yellow-600' : 'text-gray-900'}`}>{p.stock || 0}</p></div>
-                            </div>
-                            {(isLow || isOut) && <div className={`mt-2 flex items-center gap-1 text-sm ${isOut ? 'text-red-600' : 'text-yellow-600'}`}><AlertTriangle size={14} />{isOut ? 'Out of stock' : 'Low stock'}</div>}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-// ============= SETTINGS PANEL =============
-import { SettingsPanel } from "@/components/pos/SettingsPanel";
-
-// ============= MAIN POS SHELL =============
 export function POSShell() {
     const { user, isLoaded } = useUser();
     const { outlet } = usePOSStore(); // Get outlet from store for shop name
@@ -394,6 +46,53 @@ export function POSShell() {
     const tenantId = (user?.publicMetadata?.tenantId as string) || "";
     const outletId = (user?.publicMetadata?.outletId as string) || "";
 
+    const [isAuthenticating, setIsAuthenticating] = useState(true);
+
+    // Authentication Handshake
+    useEffect(() => {
+        const initAuth = async () => {
+            if (!isLoaded || !user) return;
+
+            // If already authenticated with valid token, skip
+            const { isAuthenticated } = await import('@/services/pos-auth');
+            if (isAuthenticated()) {
+                setIsAuthenticating(false);
+                return;
+            }
+
+            // Otherwise, perform login handshake
+            if (outletId) {
+                console.log("[POS Shell] Starting POS Auth Handshake...");
+                try {
+                    const { loginToPos } = await import('@/services/pos-auth');
+                    const result = await loginToPos(outletId);
+
+                    if (result.success) {
+                        console.log("[POS Shell] Auth Success", result);
+                    } else {
+                        console.error("[POS Shell] Auth Failed", result.error);
+                        alert("Failed to authenticate with POS server: " + result.error);
+                    }
+                } catch (err) {
+                    console.error("[POS Shell] Auth Error", err);
+                }
+            } else {
+                console.warn("[POS Shell] No outletId found in user metadata");
+            }
+
+            setIsAuthenticating(false);
+        };
+
+        initAuth();
+    }, [isLoaded, user, outletId]);
+
+    // Debug log to trace initialization issues
+    useEffect(() => {
+        if (isLoaded) {
+            console.log("[POS Shell] Loaded User:", { tenantId, outletId, role: user?.publicMetadata?.role });
+        }
+    }, [isLoaded, tenantId, outletId, user]);
+
     useEffect(() => {
         setIsOnline(navigator.onLine);
         const on = () => setIsOnline(true), off = () => setIsOnline(false);
@@ -401,7 +100,7 @@ export function POSShell() {
         return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
     }, []);
 
-    if (!isLoaded) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-4 border-rose-500 border-t-transparent" /></div>;
+    if (!isLoaded || isAuthenticating) return <div className="flex h-screen items-center justify-center bg-gray-50 flex-col gap-4"><div className="animate-spin rounded-full h-12 w-12 border-4 border-rose-500 border-t-transparent" /><p className="text-gray-500 font-medium">Authenticating...</p></div>;
 
     const renderPanel = () => {
         switch (activePanel) {

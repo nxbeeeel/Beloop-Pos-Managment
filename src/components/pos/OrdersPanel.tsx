@@ -45,11 +45,11 @@ export function OrdersPanel({ tenantId, outletId }: OrdersPanelProps) {
 
     const allOrders = [...orders, ...serverOrders]
         .reduce((acc, o) => { if (!acc.find((x: any) => x.id === o.id)) acc.push(o); return acc; }, [] as any[])
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    const todayOrders = allOrders.filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString());
-    const todayTotal = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const filtered = search ? allOrders.filter(o => o.id.includes(search)) : allOrders;
+    const todayOrders = allOrders.filter((o: any) => new Date(o.createdAt).toDateString() === new Date().toDateString());
+    const todayTotal = todayOrders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
+    const filtered = search ? allOrders.filter((o: any) => o.id.includes(search)) : allOrders;
 
     return (
         <div className="h-full flex flex-col bg-gray-50">
@@ -68,7 +68,7 @@ export function OrdersPanel({ tenantId, outletId }: OrdersPanelProps) {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {isLoading && serverOrders.length === 0 ? <div className="flex justify-center py-12"><Loader2 className="animate-spin text-rose-500" /></div> :
                     filtered.length === 0 ? <div className="text-center py-12 text-gray-500"><History size={48} className="mx-auto mb-4 opacity-30" /><p>No orders found</p></div> :
-                        filtered.map(o => (
+                        filtered.map((o: any) => (
                             <div key={o.id} className="bg-white rounded-xl p-4 border border-gray-100 hover:border-rose-200 transition-colors">
                                 <div className="flex justify-between items-start mb-2">
                                     <span className="font-bold font-mono text-gray-900">#{o.id.slice(-6).toUpperCase()}</span>

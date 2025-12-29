@@ -195,7 +195,7 @@ export const CartContent = () => {
                                     <span className="text-xs font-bold text-rose-700">COUPON APPLIED</span>
                                     <span className="text-[10px] text-rose-500 uppercase tracking-widest">{activeDiscount.code}</span>
                                 </div>
-                                <button onClick={removeDiscount} className="text-rose-400 hover:text-rose-600"><X size={16} /></button>
+                                <button onClick={removeDiscount} className="text-rose-400 hover:text-rose-600" aria-label="Remove coupon"><X size={16} /></button>
                             </div>
                         )}
                     </div>
