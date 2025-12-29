@@ -177,7 +177,7 @@ export function ModifierModal({ isOpen, item, onClose, onAddToCart }: ModifierMo
                             <h2 className="text-2xl font-bold text-gray-900">{item.name}</h2>
                             <p className="text-gray-500 font-mono">₹{basePrice.toFixed(2)} Base Price</p>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                        <button onClick={onClose} aria-label="Close" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                             <X size={24} />
                         </button>
                     </div>
@@ -200,8 +200,8 @@ export function ModifierModal({ isOpen, item, onClose, onAddToCart }: ModifierMo
                                                 key={option.id}
                                                 onClick={() => toggleOption(group.id, option.id, group)}
                                                 className={`flex justify-between items-center p-4 rounded-xl border-2 transition-all ${isSelected
-                                                        ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-sm'
-                                                        : 'border-gray-100 hover:border-gray-200 text-gray-600'
+                                                    ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-sm'
+                                                    : 'border-gray-100 hover:border-gray-200 text-gray-600'
                                                     }`}
                                             >
                                                 <div className="flex items-center gap-3">
@@ -241,6 +241,7 @@ export function ModifierModal({ isOpen, item, onClose, onAddToCart }: ModifierMo
                                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                                     className="p-3 hover:bg-gray-100 rounded-lg text-gray-600 disabled:opacity-30"
                                     disabled={quantity <= 1}
+                                    aria-label="Decrease quantity"
                                 >
                                     <Minus size={20} />
                                 </button>
@@ -248,6 +249,7 @@ export function ModifierModal({ isOpen, item, onClose, onAddToCart }: ModifierMo
                                 <button
                                     onClick={() => setQuantity(quantity + 1)}
                                     className="p-3 hover:bg-gray-100 rounded-lg text-gray-600"
+                                    aria-label="Increase quantity"
                                 >
                                     <Plus size={20} />
                                 </button>

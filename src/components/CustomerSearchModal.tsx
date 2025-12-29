@@ -146,8 +146,9 @@ export const CustomerSearchModal = ({ isOpen, onClose }: CustomerSearchModalProp
                     ) : (
                         <div className="p-6 space-y-4 bg-white flex-1">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                                <label htmlFor="customer-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                                 <input
+                                    id="customer-phone"
                                     type="tel"
                                     value={newCustomerPhone}
                                     onChange={e => setNewCustomerPhone(e.target.value)}
@@ -155,8 +156,9 @@ export const CustomerSearchModal = ({ isOpen, onClose }: CustomerSearchModalProp
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
+                                <label htmlFor="customer-name" className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
                                 <input
+                                    id="customer-name"
                                     type="text"
                                     value={newCustomerName}
                                     onChange={e => setNewCustomerName(e.target.value)}
