@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
-import { ArrowLeft, Plus, Users, Clock, Receipt, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Users, Clock, Receipt, Loader2, WifiOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface TableOrder {
@@ -21,6 +21,7 @@ export default function TablesPage() {
     const { user, isLoaded } = useUser();
     const [tables, setTables] = useState<TableOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isOffline, setIsOffline] = useState(false);
     const [showNewTable, setShowNewTable] = useState(false);
     const [newTableNumber, setNewTableNumber] = useState("");
 
@@ -29,11 +30,28 @@ export default function TablesPage() {
 
     const loadTables = async () => {
         try {
-            const { POSExtendedService } = await import("@/services/pos-extended");
-            const openTables = await POSExtendedService.getOpenTables({ tenantId, outletId });
-            setTables(openTables);
+            // 1. Try to load from cache first (instant)
+            const { OfflineStore } = await import("@/lib/offline-store");
+            const cached = await OfflineStore.getTables();
+            if (cached && cached.length >= 0) {
+                setTables(cached);
+                setIsLoading(false);
+            }
+
+            // 2. If online, fetch fresh data
+            if (navigator.onLine) {
+                const { POSExtendedService } = await import("@/services/pos-extended");
+                const openTables = await POSExtendedService.getOpenTables({ tenantId, outletId });
+                setTables(openTables);
+                setIsOffline(false);
+                // Cache the fresh data
+                await OfflineStore.setTables(openTables);
+            } else {
+                setIsOffline(true);
+            }
         } catch (err) {
             console.error("Failed to load tables:", err);
+            setIsOffline(!navigator.onLine);
         } finally {
             setIsLoading(false);
         }
@@ -43,6 +61,16 @@ export default function TablesPage() {
         if (isLoaded && user && tenantId && outletId) {
             loadTables();
         }
+
+        // Listen for online/offline
+        const handleOnline = () => { setIsOffline(false); loadTables(); };
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, [isLoaded, user, tenantId, outletId]);
 
     const handleOpenTable = async () => {

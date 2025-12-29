@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
-import { ArrowLeft, Clock, ChefHat, CheckCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, ChefHat, CheckCircle, Loader2, WifiOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface KitchenOrder {
@@ -16,21 +16,40 @@ interface KitchenOrder {
     prepStartedAt?: string;
 }
 
+const KITCHEN_CACHE_KEY = 'offline:kitchen_orders';
+
 export default function KitchenPage() {
     const { user, isLoaded } = useUser();
     const [orders, setOrders] = useState<KitchenOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isOffline, setIsOffline] = useState(false);
 
     const tenantId = (user?.publicMetadata?.tenantId as string) || "";
     const outletId = (user?.publicMetadata?.outletId as string) || "";
 
     const loadOrders = async () => {
         try {
-            const { POSExtendedService } = await import("@/services/pos-extended");
-            const kitchenOrders = await POSExtendedService.getKitchenOrders({ tenantId, outletId });
-            setOrders(kitchenOrders);
+            // 1. Load from cache first
+            const { get: getIDB, set: setIDB } = await import('idb-keyval');
+            const cached = await getIDB(KITCHEN_CACHE_KEY);
+            if (cached) {
+                setOrders(cached as KitchenOrder[]);
+                setIsLoading(false);
+            }
+
+            // 2. If online, fetch fresh data
+            if (navigator.onLine) {
+                const { POSExtendedService } = await import("@/services/pos-extended");
+                const kitchenOrders = await POSExtendedService.getKitchenOrders({ tenantId, outletId });
+                setOrders(kitchenOrders);
+                setIsOffline(false);
+                await setIDB(KITCHEN_CACHE_KEY, kitchenOrders);
+            } else {
+                setIsOffline(true);
+            }
         } catch (err) {
             console.error("Failed to load kitchen orders:", err);
+            setIsOffline(!navigator.onLine);
         } finally {
             setIsLoading(false);
         }
@@ -39,10 +58,22 @@ export default function KitchenPage() {
     useEffect(() => {
         if (isLoaded && user && tenantId && outletId) {
             loadOrders();
-            // Poll every 10 seconds for new orders
-            const interval = setInterval(loadOrders, 10000);
+            // Poll every 10 seconds for new orders (only if online)
+            const interval = setInterval(() => {
+                if (navigator.onLine) loadOrders();
+            }, 10000);
             return () => clearInterval(interval);
         }
+
+        // Listen for online/offline
+        const handleOnline = () => { setIsOffline(false); loadOrders(); };
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, [isLoaded, user, tenantId, outletId]);
 
     const bumpOrder = async (orderId: string, currentStatus: string) => {
@@ -110,10 +141,10 @@ export default function KitchenPage() {
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.9 }}
                                 className={`rounded-xl overflow-hidden ${isNew
-                                        ? 'bg-red-600 ring-2 ring-red-400 animate-pulse'
-                                        : isUrgent
-                                            ? 'bg-orange-700 ring-2 ring-orange-400'
-                                            : 'bg-gray-800'
+                                    ? 'bg-red-600 ring-2 ring-red-400 animate-pulse'
+                                    : isUrgent
+                                        ? 'bg-orange-700 ring-2 ring-orange-400'
+                                        : 'bg-gray-800'
                                     }`}
                             >
                                 {/* Order Header */}
@@ -156,8 +187,8 @@ export default function KitchenPage() {
                                 <button
                                     onClick={() => bumpOrder(order.id, order.kitchenStatus)}
                                     className={`w-full py-3 font-bold text-center flex items-center justify-center gap-2 transition-colors ${isNew
-                                            ? 'bg-white text-red-600 hover:bg-gray-100'
-                                            : 'bg-green-600 text-white hover:bg-green-700'
+                                        ? 'bg-white text-red-600 hover:bg-gray-100'
+                                        : 'bg-green-600 text-white hover:bg-green-700'
                                         }`}
                                 >
                                     <CheckCircle size={18} />
