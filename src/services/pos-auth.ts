@@ -37,12 +37,34 @@ export interface PosAuthResult {
  */
 export async function loginToPos(outletId: string): Promise<PosAuthResult> {
     try {
+        // Get Clerk session token dynamically
+        const { useAuth } = await import('@clerk/nextjs');
+
+        // Since this may be called outside React, we need to get the token differently
+        // Use the __clerk_session cookie or localStorage
+        let sessionToken: string | null = null;
+
+        // Try to get from window.__clerk (Clerk's global state)
+        if (typeof window !== 'undefined' && (window as any).__clerk) {
+            const session = await (window as any).__clerk.session;
+            if (session) {
+                sessionToken = await session.getToken();
+            }
+        }
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        // Add session token if available (for cross-origin requests)
+        if (sessionToken) {
+            headers['Authorization'] = `Bearer ${sessionToken}`;
+        }
+
         const response = await fetch(`${ADMIN_API_URL}/api/pos/auth`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include', // Send Clerk session cookie
+            headers,
+            credentials: 'include', // Still try cookies for same-origin
             body: JSON.stringify({ outletId }),
         });
 

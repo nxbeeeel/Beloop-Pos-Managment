@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Define public routes
+// Define public routes - these don't require auth check in middleware
+// (Clerk auth is handled at page level for POS)
 const isPublicRoute = createRouteMatcher([
     "/api/trpc(.*)",
     "/sign-in(.*)",
@@ -8,6 +9,13 @@ const isPublicRoute = createRouteMatcher([
     "/orders(.*)",
     "/inventory(.*)",
     "/settings(.*)",
+    "/tables(.*)",
+    "/kitchen(.*)",
+    "/closing(.*)",
+    "/customers(.*)",
+    "/reports(.*)",
+    "/hq(.*)",
+    "/onboarding(.*)",
     "/" // Allow root access for SignedOut view
 ]);
 
