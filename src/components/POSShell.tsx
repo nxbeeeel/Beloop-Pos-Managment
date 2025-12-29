@@ -5,8 +5,14 @@ import { useUser, SignOutButton } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Home, ShoppingBag, History, Package, Users, ChefHat,
-    Settings, LogOut, Menu, X, Wifi, WifiOff
+    Settings, LogOut, Menu, X, Wifi, WifiOff, Loader2
 } from "lucide-react";
+
+// Use existing components directly
+import { usePOSStore } from "@/lib/store";
+import { MenuGrid } from "@/components/MenuGrid";
+import { CartContent } from "@/components/CartContent";
+import { PaymentModal } from "@/components/PaymentModal";
 
 export type PanelType = 'menu' | 'orders' | 'tables' | 'kitchen' | 'inventory' | 'settings';
 
@@ -25,14 +31,100 @@ const navItems: NavItem[] = [
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-// Stub panels for now
-function StubPanel({ name }: { name: string }) {
+// Stub panel for features not yet fully migrated
+function StubPanel({ name, icon: Icon }: { name: string; icon: React.ElementType }) {
     return (
-        <div className="h-full flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{name}</h2>
-                <p className="text-gray-500">Panel under development</p>
+        <div className="h-full flex flex-col items-center justify-center bg-gray-50 text-center p-8">
+            <Icon size={64} className="text-gray-300 mb-4" />
+            <h2 className="text-2xl font-bold text-gray-700 mb-2">{name}</h2>
+            <p className="text-gray-500">Coming soon</p>
+        </div>
+    );
+}
+
+// Menu Panel using existing components
+function MenuPanel({ tenantId, outletId }: { tenantId: string; outletId: string }) {
+    const { cart, products, categories, isLoading, error, fetchMenu, total, checkout } = usePOSStore();
+    const [showPayment, setShowPayment] = useState(false);
+
+    useEffect(() => {
+        if (tenantId && outletId) {
+            fetchMenu({ tenantId, outletId });
+        }
+    }, [tenantId, outletId, fetchMenu]);
+
+    const handleCheckout = async (method: string, tendered: number) => {
+        await checkout(method, tendered, { tenantId, outletId });
+        setShowPayment(false);
+    };
+
+    if (isLoading && products.length === 0) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
             </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
+                <p className="text-red-500 text-center">{error}</p>
+                <button
+                    onClick={() => fetchMenu({ tenantId, outletId })}
+                    className="px-4 py-2 bg-rose-600 text-white rounded-lg"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-full">
+            {/* Menu Grid */}
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                <MenuGrid
+                    categories={categories}
+                    items={products}
+                    onEditItem={() => { }}
+                />
+            </div>
+
+            {/* Cart Sidebar (Desktop) */}
+            <aside className="hidden lg:flex w-96 bg-white border-l border-gray-200 flex-col">
+                <div className="p-4 border-b border-gray-100">
+                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <ShoppingBag size={20} className="text-rose-500" />
+                        Current Order
+                    </h2>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    <CartContent />
+                </div>
+                {cart.length > 0 && (
+                    <div className="p-4 border-t border-gray-100 space-y-3">
+                        <div className="flex justify-between text-lg font-bold">
+                            <span>Total</span>
+                            <span className="text-rose-600">₹{total().toFixed(2)}</span>
+                        </div>
+                        <button
+                            onClick={() => setShowPayment(true)}
+                            className="w-full py-4 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700"
+                        >
+                            Checkout
+                        </button>
+                    </div>
+                )}
+            </aside>
+
+            {/* Payment Modal */}
+            <PaymentModal
+                isOpen={showPayment}
+                total={total()}
+                onClose={() => setShowPayment(false)}
+                onConfirm={handleCheckout}
+            />
         </div>
     );
 }
@@ -42,6 +134,9 @@ export function POSShell() {
     const [activePanel, setActivePanel] = useState<PanelType>('menu');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
+
+    const tenantId = (user?.publicMetadata?.tenantId as string) || "";
+    const outletId = (user?.publicMetadata?.outletId as string) || "";
 
     useEffect(() => {
         setIsOnline(navigator.onLine);
@@ -64,15 +159,22 @@ export function POSShell() {
     }
 
     const renderPanel = () => {
-        const labels: Record<PanelType, string> = {
-            menu: 'Menu',
-            orders: 'Orders',
-            tables: 'Tables',
-            kitchen: 'Kitchen',
-            inventory: 'Inventory',
-            settings: 'Settings'
-        };
-        return <StubPanel name={labels[activePanel]} />;
+        switch (activePanel) {
+            case 'menu':
+                return <MenuPanel tenantId={tenantId} outletId={outletId} />;
+            case 'orders':
+                return <StubPanel name="Orders" icon={History} />;
+            case 'tables':
+                return <StubPanel name="Tables" icon={Users} />;
+            case 'kitchen':
+                return <StubPanel name="Kitchen" icon={ChefHat} />;
+            case 'inventory':
+                return <StubPanel name="Inventory" icon={Package} />;
+            case 'settings':
+                return <StubPanel name="Settings" icon={Settings} />;
+            default:
+                return <MenuPanel tenantId={tenantId} outletId={outletId} />;
+        }
     };
 
     return (
@@ -199,14 +301,14 @@ export function POSShell() {
             </AnimatePresence>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-hidden md:mt-0 mt-14">
+            <main className="flex-1 overflow-hidden md:mt-0 mt-14 mb-16 md:mb-0">
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activePanel}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.2 }}
+                        transition={{ duration: 0.15 }}
                         className="h-full"
                     >
                         {renderPanel()}
@@ -215,7 +317,7 @@ export function POSShell() {
             </main>
 
             {/* Mobile Bottom Tab Bar */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1">
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1 z-30">
                 <div className="flex justify-around">
                     {navItems.slice(0, 5).map((item) => {
                         const Icon = item.icon;
