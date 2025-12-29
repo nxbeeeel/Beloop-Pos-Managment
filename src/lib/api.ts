@@ -11,9 +11,10 @@ export const api = axios.create({
     },
 });
 
-// Request Interceptor: Add Auth Token
+// Request Interceptor: Add POS Auth Token
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
+    // Use the POS auth token (stored by loginToPos)
+    const token = localStorage.getItem('pos_auth_token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
