@@ -119,18 +119,38 @@ export const MenuCacheService = {
         currentVersion: number
     ): Promise<boolean> {
         try {
-            const { SyncService } = await import('@/services/sync');
-            const hasUpdates = await SyncService.checkSync(saasContext, currentVersion);
+            // Check if online
+            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                console.log('[MenuCache] Offline - skipping update check');
+                return false;
+            }
 
-            if (hasUpdates) {
-                console.log('[MenuCache] Server has updates, refreshing...');
-                await this.fetchFromServer(saasContext);
+            const { getAuthHeaders } = await import('@/services/pos-auth');
+            const headers = getAuthHeaders();
 
-                // Dispatch event for UI to refresh
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('menu-updated'));
+            if (!headers['Authorization']) {
+                console.log('[MenuCache] No auth token - skipping update check');
+                return false;
+            }
+
+            const url = `${process.env.NEXT_PUBLIC_TRACKER_URL}/api/trpc/pos.checkSync?input=${encodeURIComponent(JSON.stringify({ json: { productsVersion: currentVersion } }))}`;
+
+            const response = await fetch(url, { headers });
+
+            if (response.ok) {
+                const data = await response.json();
+                const hasChanges = data.result?.data?.json?.hasChanges || data.result?.data?.hasChanges;
+
+                if (hasChanges) {
+                    console.log('[MenuCache] Server has updates, refreshing...');
+                    await this.fetchFromServer(saasContext);
+
+                    // Dispatch event for UI to refresh
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('menu-updated'));
+                    }
+                    return true;
                 }
-                return true;
             }
 
             console.log('[MenuCache] Menu is up to date');
