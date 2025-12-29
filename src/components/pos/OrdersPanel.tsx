@@ -16,7 +16,10 @@ export function OrdersPanel({ tenantId, outletId }: OrdersPanelProps) {
     useEffect(() => {
         const load = async () => {
             try {
-                if (!tenantId || !outletId) return;
+                if (!tenantId || !outletId) {
+                    setIsLoading(false);
+                    return;
+                }
 
                 // Load from IDB first
                 const { get: getIDB, set: setIDB } = await import('idb-keyval');

@@ -60,6 +60,11 @@ export function POSShell() {
                 return;
             }
 
+            // Warn if metadata is missing
+            if (!tenantId || !outletId) {
+                console.warn("[POS Shell] Missing tenantId or outletId in user metadata. Some panels may be empty.");
+            }
+
             // Otherwise, perform login handshake
             if (outletId) {
                 console.log("[POS Shell] Starting POS Auth Handshake...");

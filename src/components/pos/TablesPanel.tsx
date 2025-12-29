@@ -16,7 +16,10 @@ export function TablesPanel({ tenantId, outletId }: TablesPanelProps) {
     useEffect(() => {
         const load = async () => {
             try {
-                if (!tenantId || !outletId) return;
+                if (!tenantId || !outletId) {
+                    setIsLoading(false);
+                    return;
+                }
 
                 const { get: getIDB, set: setIDB } = await import('idb-keyval');
                 const cached = await getIDB('offline:tables');
