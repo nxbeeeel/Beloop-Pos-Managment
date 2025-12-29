@@ -238,64 +238,88 @@ export const usePOSStore = create<POSState>()(
 
             fetchMenu: async (saasContext: { tenantId: string; outletId: string }) => {
                 const state = get();
-                // If we have data, don't show loading spinner, just background refresh
-                if (state.products.length === 0) {
-                    set({ isLoading: true, error: null });
-                }
 
+                // 1. Try to load from cache first (instant)
                 try {
-                    const result = await SyncService.pullProducts(saasContext);
+                    const { MenuCacheService } = await import('@/lib/menu-cache');
+                    const cached = await MenuCacheService.getCachedMenu();
 
-                    if (result && result.data) {
-                        // Extract Categories
-                        const uniqueCategories = Array.from(new Set(
-                            result.data
-                                .map((p: any) => p.category ? JSON.stringify({ id: p.category.id, name: p.category.name }) : null)
-                                .filter(Boolean)
-                        )).map((s: any) => JSON.parse(s));
-
-                        // Map Tracker Product to POS MenuItem
-                        const menuItems: MenuItem[] = result.data.map((p: any) => ({
+                    if (cached && cached.products.length > 0) {
+                        // Show cached data immediately
+                        const menuItems: MenuItem[] = cached.products.map((p: any) => ({
                             id: p.id,
                             name: p.name,
-                            price: Number(p.price || 0), // Base Price
+                            price: Number(p.price || 0),
                             sku: p.sku,
                             categoryId: p.categoryId || 'uncategorized',
                         }));
 
                         set({
                             products: menuItems,
-                            categories: uniqueCategories.sort((a: any, b: any) => a.name.localeCompare(b.name)),
-                            outlet: result.outlet || null,
+                            categories: cached.categories,
+                            outlet: cached.outlet,
                             isLoading: false,
                             error: null
                         });
 
-                        // Update Sync Version
-                        const maxVersion = result.data.reduce((max: number, p: any) => Math.max(max, p.version || 0), 0);
-                        await setIDB('products_version', maxVersion);
-                    } else {
-                        // Sync failed or returned no data
-                        if (get().products.length === 0) {
-                            set({
-                                isLoading: false,
-                                error: 'No Menu Data Available. Please check your internet or contact admin.'
-                            });
-                        } else {
-                            // We have local data, keep using it (Silent Fail)
-                            set({ isLoading: false });
-                        }
-                    }
-                } catch (err) {
-                    console.error('Fetch Menu Error:', err);
-                    if (get().products.length === 0) {
-                        set({
-                            isLoading: false,
-                            error: 'Failed to load menu. ' + (err instanceof Error ? err.message : 'Unknown error')
+                        console.log(`[Store] Loaded ${menuItems.length} products from cache`);
+
+                        // Check for updates in background
+                        MenuCacheService.checkForUpdates(saasContext, cached.version).then((updated) => {
+                            if (updated) {
+                                // Reload from updated cache
+                                MenuCacheService.getCachedMenu().then((newCache) => {
+                                    if (newCache) {
+                                        const newItems: MenuItem[] = newCache.products.map((p: any) => ({
+                                            id: p.id,
+                                            name: p.name,
+                                            price: Number(p.price || 0),
+                                            sku: p.sku,
+                                            categoryId: p.categoryId || 'uncategorized',
+                                        }));
+                                        set({ products: newItems, categories: newCache.categories });
+                                        console.log('[Store] Menu updated from server');
+                                    }
+                                });
+                            }
                         });
-                    } else {
-                        set({ isLoading: false });
+
+                        return; // Done - showed cached data
                     }
+                } catch (cacheError) {
+                    console.warn('[Store] Cache read failed:', cacheError);
+                }
+
+                // 2. No cache - show loading and fetch from server
+                set({ isLoading: true, error: null });
+
+                try {
+                    const { MenuCacheService } = await import('@/lib/menu-cache');
+                    const serverData = await MenuCacheService.fetchFromServer(saasContext);
+
+                    const menuItems: MenuItem[] = serverData.products.map((p: any) => ({
+                        id: p.id,
+                        name: p.name,
+                        price: Number(p.price || 0),
+                        sku: p.sku,
+                        categoryId: p.categoryId || 'uncategorized',
+                    }));
+
+                    set({
+                        products: menuItems,
+                        categories: serverData.categories,
+                        outlet: serverData.outlet,
+                        isLoading: false,
+                        error: null
+                    });
+
+                    console.log(`[Store] Loaded ${menuItems.length} products from server`);
+                } catch (err) {
+                    console.error('[Store] Fetch Menu Error:', err);
+                    set({
+                        isLoading: false,
+                        error: 'Failed to load menu. ' + (err instanceof Error ? err.message : 'Check connection')
+                    });
                 }
             },
 
