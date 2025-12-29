@@ -147,18 +147,29 @@ export default function MenuPanel({ tenantId, outletId }: MenuPanelProps) {
                         T: {tenantId}<br />O: {outletId}
                     </div>
                     <button
-                        onClick={() => fetchMenu({ tenantId, outletId })}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                        type="button"
+                        onClick={() => {
+                            console.log('[MenuPanel] Check Again clicked');
+                            fetchMenu({ tenantId, outletId });
+                        }}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 active:bg-gray-100"
                     >
                         Check Again
                     </button>
                     <button
+                        type="button"
                         onClick={async () => {
-                            const { MenuCacheService } = await import('@/lib/menu-cache');
-                            await MenuCacheService.clearCache();
-                            window.location.reload();
+                            try {
+                                console.log('[MenuPanel] Reset Cache clicked');
+                                const { MenuCacheService } = await import('@/lib/menu-cache');
+                                await MenuCacheService.clearCache();
+                                window.location.reload();
+                            } catch (err) {
+                                console.error('[MenuPanel] Reset Cache failed:', err);
+                                alert('Failed to clear cache. Check console.');
+                            }
                         }}
-                        className="mt-2 text-xs text-red-500 underline"
+                        className="mt-2 text-xs text-red-500 underline cursor-pointer"
                     >
                         Reset Cache & Reload
                     </button>
