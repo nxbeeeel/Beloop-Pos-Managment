@@ -5,9 +5,8 @@ import { useState, useEffect } from "react";
 import { useUser, SignOutButton } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    LayoutGrid, Receipt, Users2, ChefHat, Package, Settings,
-    LogOut, Menu, X, Wifi, WifiOff, Store, User, Search,
-    Bell, SunMoon, Clock, TrendingUp, UserCircle2
+    Home, ShoppingBag, History, Package, Users, ChefHat,
+    Settings, LogOut, Menu, X, Wifi, WifiOff, Store, User
 } from "lucide-react";
 
 import { usePOSStore } from "@/lib/store";
@@ -26,15 +25,14 @@ interface NavItem {
     id: PanelType;
     label: string;
     icon: React.ElementType;
-    badge?: number;
 }
 
 const navItems: NavItem[] = [
-    { id: 'menu', label: 'Point of Sale', icon: LayoutGrid },
-    { id: 'tables', label: 'Tables', icon: Users2 },
+    { id: 'menu', label: 'Menu', icon: Home },
+    { id: 'tables', label: 'Tables', icon: Users },
     { id: 'kitchen', label: 'Kitchen', icon: ChefHat },
-    { id: 'orders', label: 'Orders', icon: Receipt },
-    { id: 'inventory', label: 'Stock', icon: Package },
+    { id: 'orders', label: 'Orders', icon: History },
+    { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -42,83 +40,97 @@ import { PinPadModal } from "@/components/PinPadModal";
 import { CustomerSearchModal } from "@/components/CustomerSearchModal";
 import { PrinterStatus } from "@/components/PrinterStatus";
 import { SyncStatus } from "@/components/SyncStatus";
+// ...
 
 export function POSShell() {
     const { user, isLoaded } = useUser();
-    const { outlet, activeStaff, setActiveStaff } = usePOSStore();
+    const { outlet, activeStaff, setActiveStaff } = usePOSStore(); // Get outlet from store for shop name
     const [activePanel, setActivePanel] = useState<PanelType>('menu');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
     const [isPinModalOpen, setIsPinModalOpen] = useState(false);
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-    const [currentTime, setCurrentTime] = useState(new Date());
 
     const tenantId = (user?.publicMetadata?.tenantId as string) || "";
     const outletId = (user?.publicMetadata?.outletId as string) || "";
 
     const [isAuthenticating, setIsAuthenticating] = useState(true);
 
-    // Update time every minute
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-        return () => clearInterval(timer);
-    }, []);
-
     // Authentication Handshake
     useEffect(() => {
         const initAuth = async () => {
             if (!isLoaded || !user) return;
 
+            // If already authenticated with valid token, skip
             const { isAuthenticated } = await import('@/services/pos-auth');
             if (isAuthenticated()) {
                 setIsAuthenticating(false);
                 return;
             }
 
+            // Warn if metadata is missing
             if (!tenantId || !outletId) {
-                console.warn("[POS] Missing tenantId or outletId");
+                console.warn("[POS Shell] Missing tenantId or outletId in user metadata. Some panels may be empty.");
             }
 
+            // Otherwise, perform login handshake
             if (outletId) {
+                console.log("[POS Shell] Starting POS Auth Handshake...");
                 try {
                     const { loginToPos } = await import('@/services/pos-auth');
                     const result = await loginToPos(outletId);
 
-                    if (result.success && result.outlet) {
-                        usePOSStore.setState({
-                            outlet: {
-                                name: result.outlet.name,
-                                address: result.outlet.address || '',
-                                phone: result.outlet.phone || ''
-                            }
-                        });
+                    if (result.success) {
+                        console.log("[POS Shell] Auth Success", result);
+                        // Save outlet info to store immediately (even if menu is empty)
+                        if (result.outlet) {
+                            usePOSStore.setState({
+                                outlet: {
+                                    name: result.outlet.name,
+                                    address: result.outlet.address || '',
+                                    phone: result.outlet.phone || ''
+                                }
+                            });
+                        }
+                    } else {
+                        console.error("[POS Shell] Auth Failed", result.error);
+                        alert("Failed to authenticate with POS server: " + result.error);
                     }
                 } catch (err) {
-                    console.error("[POS] Auth Error", err);
+                    console.error("[POS Shell] Auth Error", err);
                 }
+            } else {
+                console.warn("[POS Shell] No outletId found in user metadata");
             }
+
             setIsAuthenticating(false);
         };
+
         initAuth();
-    }, [isLoaded, user, outletId, tenantId]);
+    }, [isLoaded, user, outletId]);
+
+    // Debug log to trace initialization issues
+    useEffect(() => {
+        if (isLoaded) {
+            console.log("[POS Shell] Loaded User:", { tenantId, outletId, role: user?.publicMetadata?.role });
+        }
+    }, [isLoaded, tenantId, outletId, user]);
 
     useEffect(() => {
         setIsOnline(navigator.onLine);
         const on = () => setIsOnline(true), off = () => setIsOnline(false);
-        window.addEventListener('online', on);
-        window.addEventListener('offline', off);
-        return () => {
-            window.removeEventListener('online', on);
-            window.removeEventListener('offline', off);
-        };
+        window.addEventListener('online', on); window.addEventListener('offline', off);
+        return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
     }, []);
 
     const handlePinSuccess = async (pin: string) => {
+        // ✅ SECURITY FIX: Use real PIN verification from backend
         try {
             const { verifyStaffPin } = await import('@/services/pin-verification');
             const result = await verifyStaffPin(pin, 'STAFF_LOGIN');
 
             if (result.success && result.user) {
+                // PIN verified! Set active staff from real user data
                 setActiveStaff({
                     id: result.user.id,
                     name: result.user.name,
@@ -126,363 +138,175 @@ export function POSShell() {
                 });
                 setIsPinModalOpen(false);
             } else {
+                // Show specific error message
                 if (result.locked) {
-                    alert(`Account locked. Wait ${result.remainingMinutes} minutes.`);
+                    alert(`Account locked. Please wait ${result.remainingMinutes} minutes before trying again.`);
                 } else {
-                    alert(result.error || `Invalid PIN. ${result.remainingAttempts || 0} attempts left.`);
+                    alert(result.error || `Invalid PIN. ${result.remainingAttempts || 0} attempts remaining.`);
                 }
             }
         } catch (error) {
-            alert('Failed to verify PIN.');
+            console.error('[PIN Verification] Error:', error);
+            alert('Failed to verify PIN. Please check your connection.');
         }
     };
 
-    // Premium Loading Screen
-    if (!isLoaded || isAuthenticating) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-                <div className="text-center">
-                    <div className="relative w-20 h-20 mx-auto mb-6">
-                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-500 to-orange-500 animate-pulse" />
-                        <div className="absolute inset-1 rounded-xl bg-slate-900 flex items-center justify-center">
-                            <span className="text-3xl font-black text-white">B</span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 justify-center">
-                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-bounce [animation-delay:-0.3s]" />
-                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-bounce [animation-delay:-0.15s]" />
-                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-bounce" />
-                    </div>
-                    <p className="text-slate-400 mt-4 text-sm font-medium">Initializing POS...</p>
-                </div>
-            </div>
-        );
-    }
+    if (!isLoaded || isAuthenticating) return <div className="flex h-screen items-center justify-center bg-gray-50 flex-col gap-4"><div className="animate-spin rounded-full h-12 w-12 border-4 border-rose-500 border-t-transparent" /><p className="text-gray-500 font-medium">Authenticating...</p></div>;
 
     const renderPanel = () => {
-        const props = { tenantId, outletId };
         switch (activePanel) {
-            case 'menu': return <MenuPanel {...props} />;
-            case 'orders': return <OrdersPanel {...props} />;
-            case 'tables': return <TablesPanel {...props} />;
-            case 'kitchen': return <KitchenPanel {...props} />;
-            case 'inventory': return <InventoryPanel {...props} />;
+            case 'menu': return <MenuPanel tenantId={tenantId} outletId={outletId} />;
+            case 'orders': return <OrdersPanel tenantId={tenantId} outletId={outletId} />;
+            case 'tables': return <TablesPanel tenantId={tenantId} outletId={outletId} />;
+            case 'kitchen': return <KitchenPanel tenantId={tenantId} outletId={outletId} />;
+            case 'inventory': return <InventoryPanel tenantId={tenantId} outletId={outletId} />;
             case 'settings': return <SettingsPanel user={user} />;
-            default: return <MenuPanel {...props} />;
+            default: return <MenuPanel tenantId={tenantId} outletId={outletId} />;
         }
-    };
-
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     };
 
     return (
-        <div className="flex h-[100dvh] bg-slate-100 overflow-hidden">
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* DESKTOP SIDEBAR - Premium Dark Theme */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            <aside className="hidden md:flex w-72 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex-col shadow-2xl">
-                {/* Logo & Outlet */}
-                <div className="p-6 border-b border-slate-800/50">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
-                            <span className="text-xl font-black text-white">B</span>
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-white tracking-tight">
-                                Beloop<span className="text-rose-400">.</span>
-                            </h1>
-                            <p className="text-xs text-slate-500">Point of Sale</p>
-                        </div>
-                    </div>
-
-                    {/* Outlet Badge */}
-                    <div className="mt-5 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
-                        <div className="flex items-center gap-2">
-                            <Store size={14} className="text-rose-400" />
-                            <span className="text-sm font-semibold text-white truncate">
-                                {outlet?.name || "Loading..."}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-4 mt-2">
-                            <div className="flex items-center gap-1.5 text-slate-400 text-xs">
-                                <Clock size={12} />
-                                <span>{formatTime(currentTime)}</span>
-                            </div>
-                            <div className={`flex items-center gap-1.5 text-xs ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-                                <span>{isOnline ? 'Online' : 'Offline'}</span>
-                            </div>
+        <div className="flex h-[100dvh] bg-gray-100 overflow-hidden">
+            {/* Desktop Sidebar */}
+            <aside className="hidden md:flex w-20 lg:w-64 bg-white border-r border-gray-200 flex-col">
+                <div className="p-4 border-b border-gray-100">
+                    <h1 className="text-xl font-bold text-gray-900 lg:block hidden">Beloop<span className="text-rose-600">.</span></h1>
+                    <div className="lg:hidden flex justify-center"><span className="text-2xl font-bold text-rose-600">B</span></div>
+                    {/* Outlet Info */}
+                    <div className="mt-4 hidden lg:block">
+                        <div className="flex items-center gap-2 text-gray-700 font-medium">
+                            <Store size={16} className="text-rose-500" />
+                            <span className="truncate">{outlet?.name || "Loading..."}</span>
                         </div>
                     </div>
                 </div>
-
-                {/* Navigation */}
-                <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                <nav className="flex-1 p-2 space-y-1">
                     {navItems.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = activePanel === item.id;
+                        const Icon = item.icon, isActive = activePanel === item.id;
                         return (
-                            <button
-                                key={item.id}
-                                onClick={() => setActivePanel(item.id)}
-                                className={`
-                                    w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium transition-all duration-200
-                                    ${isActive
-                                        ? 'bg-gradient-to-r from-rose-500/20 to-orange-500/10 text-white border border-rose-500/30 shadow-lg shadow-rose-500/10'
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                                    }
-                                `}
-                            >
-                                <div className={`p-2 rounded-lg ${isActive ? 'bg-rose-500 shadow-lg shadow-rose-500/30' : 'bg-slate-800'}`}>
-                                    <Icon size={18} className={isActive ? 'text-white' : 'text-slate-400'} />
-                                </div>
-                                <span className="text-sm">{item.label}</span>
-                                {item.badge && (
-                                    <span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                                        {item.badge}
-                                    </span>
-                                )}
+                            <button key={item.id} onClick={() => setActivePanel(item.id)} className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl font-medium transition-all ${isActive ? 'bg-rose-50 text-rose-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                <Icon size={22} className={isActive ? 'text-rose-500' : ''} /><span className="hidden lg:block">{item.label}</span>
                             </button>
                         );
                     })}
 
-                    {/* Quick Actions */}
-                    <div className="pt-4 mt-4 border-t border-slate-800/50">
-                        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 mb-2">Quick Actions</p>
-                        <button
-                            onClick={() => setIsCustomerModalOpen(true)}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
-                        >
-                            <div className="p-2 rounded-lg bg-slate-800">
-                                <Search size={18} />
-                            </div>
-                            <span className="text-sm font-medium">Find Customer</span>
-                        </button>
-                    </div>
+                    {/* Customer Lookup Button */}
+                    <button
+                        onClick={() => setIsCustomerModalOpen(true)}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition-all mt-4"
+                    >
+                        <User size={22} className="text-gray-500" />
+                        <span className="hidden lg:block">Customer</span>
+                    </button>
                 </nav>
-
-                {/* User Section */}
-                <div className="p-4 border-t border-slate-800/50">
-                    {/* Active Staff */}
-                    <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 mb-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white font-bold shadow-lg shadow-rose-500/20">
-                                    {activeStaff?.name?.[0] || user?.firstName?.[0] || '?'}
-                                </div>
-                                <div>
-                                    <p className="text-sm font-semibold text-white">
-                                        {activeStaff?.name || user?.fullName || "Staff"}
-                                    </p>
-                                    <p className="text-xs text-slate-500 capitalize">
-                                        {activeStaff?.role || (user?.publicMetadata?.role as string) || "Staff"}
-                                    </p>
-                                </div>
+                <div className="p-4 border-t border-gray-100 space-y-3">
+                    {/* User Info */}
+                    <div className="hidden lg:flex items-center justify-between px-2 mb-2 bg-gray-50 p-2 rounded-xl">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold shrink-0">
+                                {activeStaff ? activeStaff.name[0] : (user?.firstName?.[0] || <User size={16} />)}
                             </div>
-                            <button
-                                onClick={() => setIsPinModalOpen(true)}
-                                className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                                title="Switch User"
-                            >
-                                <UserCircle2 size={20} />
-                            </button>
+                            <div className="overflow-hidden">
+                                <p className="text-sm font-bold text-gray-900 truncate">
+                                    {activeStaff ? activeStaff.name : (user?.fullName || "Staff")}
+                                </p>
+                                <p className="text-xs text-gray-500 capitalize truncate">
+                                    {activeStaff ? activeStaff.role : ((user?.publicMetadata?.role as string) || "Employee")}
+                                </p>
+                            </div>
                         </div>
-                    </div>
-
-                    {/* Status Indicators */}
-                    <div className="flex gap-2 mb-3">
-                        <div className="flex-1"><SyncStatus /></div>
-                        <div className="flex-1"><PrinterStatus /></div>
-                    </div>
-
-                    {/* Logout */}
-                    <SignOutButton>
-                        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all">
-                            <LogOut size={18} />
-                            <span className="text-sm font-medium">Sign Out</span>
+                        <button
+                            onClick={() => setIsPinModalOpen(true)}
+                            className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-rose-600 transition-colors shadow-sm"
+                            title="Switch User"
+                        >
+                            <Users size={16} />
                         </button>
-                    </SignOutButton>
+                    </div>
+
+                    <div className="hidden lg:block px-3 mb-2 space-y-2">
+                        <SyncStatus />
+                        <PrinterStatus />
+                    </div>
+
+                    <div className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${isOnline ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                        {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}<span className="hidden lg:block">{isOnline ? 'Online' : 'Offline'}</span>
+                    </div>
+                    <SignOutButton><button className="w-full flex items-center gap-3 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><LogOut size={20} /><span className="hidden lg:block text-sm font-medium">Logout</span></button></SignOutButton>
                 </div>
             </aside>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* MOBILE HEADER - Sleek Top Bar */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-slate-900 px-4 py-3 flex justify-between items-center shadow-lg">
-                <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 rounded-xl bg-slate-800 text-white"
-                >
-                    <Menu size={20} />
-                </button>
-
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
-                        <span className="text-sm font-black text-white">B</span>
-                    </div>
-                    <div>
-                        <h1 className="text-sm font-bold text-white">Beloop</h1>
-                        <p className="text-[10px] text-slate-400">{outlet?.name}</p>
-                    </div>
+            {/* Mobile Header */}
+            <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b px-4 py-3 flex justify-between items-center">
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2" aria-label="Menu"><Menu size={24} className="text-gray-700" /></button>
+                <div className="flex flex-col items-center">
+                    <h1 className="text-lg font-bold text-gray-900">Beloop<span className="text-rose-600">.</span></h1>
+                    <span className="text-xs text-gray-500">{outlet?.name}</span>
                 </div>
-
-                <div className={`p-2 rounded-xl ${isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                    {isOnline ? <Wifi size={18} /> : <WifiOff size={18} />}
-                </div>
+                <div className={`p-2 rounded-full ${isOnline ? 'bg-green-100' : 'bg-yellow-100'}`}>{isOnline ? <Wifi size={16} className="text-green-600" /> : <WifiOff size={16} className="text-yellow-600" />}</div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* MOBILE SIDEBAR - Full Screen Overlay */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* Mobile Sidebar */}
             <AnimatePresence>
                 {isSidebarOpen && (
                     <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="md:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-                            onClick={() => setIsSidebarOpen(false)}
-                        />
-                        <motion.aside
-                            initial={{ x: -320 }}
-                            animate={{ x: 0 }}
-                            exit={{ x: -320 }}
-                            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                            className="md:hidden fixed left-0 top-0 bottom-0 w-80 bg-slate-900 z-50 flex flex-col"
-                        >
-                            {/* Mobile Sidebar Header */}
-                            <div className="p-5 border-b border-slate-800 flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
-                                        <span className="text-xl font-black text-white">B</span>
-                                    </div>
-                                    <div>
-                                        <h1 className="text-lg font-bold text-white">Beloop</h1>
-                                        <p className="text-xs text-slate-500">{outlet?.name}</p>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="md:hidden fixed inset-0 bg-black/50 z-50" onClick={() => setIsSidebarOpen(false)} />
+                        <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 25 }} className="md:hidden fixed left-0 top-0 bottom-0 w-72 bg-white z-50 shadow-2xl flex flex-col">
+                            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                                <div>
+                                    <h1 className="text-xl font-bold text-gray-900">Beloop<span className="text-rose-600">.</span></h1>
+                                    <div className="flex items-center gap-2 mt-1 text-gray-600 text-sm">
+                                        <Store size={14} />
+                                        <span>{outlet?.name || "Loading..."}</span>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setIsSidebarOpen(false)}
-                                    className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
-                                >
-                                    <X size={20} />
-                                </button>
+                                <button onClick={() => setIsSidebarOpen(false)} className="p-2" aria-label="Close"><X size={24} className="text-gray-500" /></button>
                             </div>
 
-                            {/* Mobile User Card */}
-                            <div className="p-4 border-b border-slate-800">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
-                                        {user?.firstName?.[0] || '?'}
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-white">{user?.fullName || "Staff"}</p>
-                                        <p className="text-xs text-slate-500 capitalize">
-                                            {(user?.publicMetadata?.role as string) || "Staff"}
-                                        </p>
-                                    </div>
+                            <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-lg">
+                                    {user?.firstName?.[0] || <User size={20} />}
+                                </div>
+                                <div>
+                                    <p className="font-bold text-gray-900">{user?.fullName || "Staff"}</p>
+                                    <p className="text-xs text-gray-500 capitalize">{(user?.publicMetadata?.role as string) || "Employee"}</p>
                                 </div>
                             </div>
 
-                            {/* Mobile Navigation */}
                             <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                                 {navItems.map((item) => {
-                                    const Icon = item.icon;
-                                    const isActive = activePanel === item.id;
-                                    return (
-                                        <button
-                                            key={item.id}
-                                            onClick={() => {
-                                                setActivePanel(item.id);
-                                                setIsSidebarOpen(false);
-                                            }}
-                                            className={`
-                                                w-full flex items-center gap-3 px-4 py-4 rounded-xl font-medium transition-all
-                                                ${isActive
-                                                    ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/30'
-                                                    : 'text-slate-400 hover:bg-slate-800'
-                                                }
-                                            `}
-                                        >
-                                            <Icon size={22} />
-                                            <span>{item.label}</span>
-                                        </button>
-                                    );
+                                    const Icon = item.icon, isActive = activePanel === item.id;
+                                    return <button key={item.id} onClick={() => { setActivePanel(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${isActive ? 'bg-rose-50 text-rose-600' : 'text-gray-600 hover:bg-gray-50'}`}><Icon size={22} /><span>{item.label}</span></button>;
                                 })}
                             </nav>
-
-                            {/* Mobile Logout */}
-                            <div className="p-4 border-t border-slate-800">
-                                <SignOutButton>
-                                    <button className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 border border-red-500/20 font-medium">
-                                        <LogOut size={20} />
-                                        <span>Sign Out</span>
-                                    </button>
-                                </SignOutButton>
-                            </div>
+                            <div className="p-4 border-t"><SignOutButton><button className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl"><LogOut size={20} /><span className="font-medium">Logout</span></button></SignOutButton></div>
                         </motion.aside>
                     </>
                 )}
             </AnimatePresence>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* MAIN CONTENT AREA */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            <main className="flex-1 overflow-hidden md:mt-0 mt-14 mb-16 md:mb-0 bg-slate-100">
+            {/* Main Content */}
+            <main className="flex-1 overflow-hidden md:mt-0 mt-14 mb-16 md:mb-0">
                 <AnimatePresence mode="wait">
-                    <motion.div
-                        key={activePanel}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="h-full"
-                    >
-                        {renderPanel()}
-                    </motion.div>
+                    <motion.div key={activePanel} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.15 }} className="h-full">{renderPanel()}</motion.div>
                 </AnimatePresence>
             </main>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* MOBILE BOTTOM TAB BAR - Modern Floating Style */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            <nav className="md:hidden fixed bottom-4 left-4 right-4 bg-slate-900 rounded-2xl px-2 py-2 z-30 shadow-2xl shadow-black/30">
+            {/* Mobile Bottom Tabs */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-1 z-30">
                 <div className="flex justify-around">
                     {navItems.slice(0, 5).map((item) => {
-                        const Icon = item.icon;
-                        const isActive = activePanel === item.id;
-                        return (
-                            <button
-                                key={item.id}
-                                onClick={() => setActivePanel(item.id)}
-                                className={`
-                                    flex flex-col items-center py-2 px-4 rounded-xl transition-all
-                                    ${isActive
-                                        ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/30'
-                                        : 'text-slate-500'
-                                    }
-                                `}
-                            >
-                                <Icon size={20} />
-                                <span className={`text-[10px] mt-1 font-medium ${isActive ? 'text-white' : 'text-slate-500'}`}>
-                                    {item.label.split(' ')[0]}
-                                </span>
-                            </button>
-                        );
+                        const Icon = item.icon, isActive = activePanel === item.id;
+                        return <button key={item.id} onClick={() => setActivePanel(item.id)} className={`flex flex-col items-center py-2 px-3 rounded-lg ${isActive ? 'text-rose-600' : 'text-gray-400'}`}><Icon size={22} /><span className="text-[10px] mt-1 font-medium">{item.label}</span></button>;
                     })}
                 </div>
             </nav>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* MODALS */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
             <PinPadModal
                 isOpen={isPinModalOpen}
                 onClose={() => setIsPinModalOpen(false)}
                 onSuccess={handlePinSuccess}
-                title="Switch Staff"
+                title="Switch Staff User"
             />
 
             <CustomerSearchModal
