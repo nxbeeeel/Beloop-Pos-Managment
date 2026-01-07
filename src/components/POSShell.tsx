@@ -123,18 +123,31 @@ export function POSShell() {
         return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
     }, []);
 
-    const handlePinSuccess = (pin: string) => {
-        // Mock Validation for Demo
-        // In real app: validate against hashed PINs in settings or local DB
-        if (pin === '1234') {
-            setActiveStaff({ id: 'u1', name: 'Manager Mike', role: 'Manager' });
-            setIsPinModalOpen(false);
-        } else if (pin === '5678') {
-            setActiveStaff({ id: 'u2', name: 'Server Sarah', role: 'Staff' });
-            setIsPinModalOpen(false);
-        } else {
-            // Shake effect handled by modal if we pass error prop back, but for now just alert
-            alert("Invalid PIN (Try 1234 or 5678)");
+    const handlePinSuccess = async (pin: string) => {
+        // ✅ SECURITY FIX: Use real PIN verification from backend
+        try {
+            const { verifyStaffPin } = await import('@/services/pin-verification');
+            const result = await verifyStaffPin(pin, 'STAFF_LOGIN');
+
+            if (result.success && result.user) {
+                // PIN verified! Set active staff from real user data
+                setActiveStaff({
+                    id: result.user.id,
+                    name: result.user.name,
+                    role: result.user.role,
+                });
+                setIsPinModalOpen(false);
+            } else {
+                // Show specific error message
+                if (result.locked) {
+                    alert(`Account locked. Please wait ${result.remainingMinutes} minutes before trying again.`);
+                } else {
+                    alert(result.error || `Invalid PIN. ${result.remainingAttempts || 0} attempts remaining.`);
+                }
+            }
+        } catch (error) {
+            console.error('[PIN Verification] Error:', error);
+            alert('Failed to verify PIN. Please check your connection.');
         }
     };
 
