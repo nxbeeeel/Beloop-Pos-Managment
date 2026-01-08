@@ -1,8 +1,8 @@
 /**
  * POS Authentication Service
- * 
- * Handles HMAC-signed token authentication with the Admin API.
- * Replaces insecure header-based auth (x-tenant-id, x-outlet-id).
+ *
+ * Handles JWT token authentication with the Admin API.
+ * Uses Clerk session tokens for cross-origin authentication.
  */
 
 const ADMIN_API_URL = process.env.NEXT_PUBLIC_TRACKER_URL || 'http://localhost:3000';
@@ -32,44 +32,86 @@ export interface PosAuthResult {
 }
 
 /**
- * Authenticate with Admin API and get signed POS token
- * Call this on POS app startup after Clerk login
+ * Get Clerk session token from various sources
  */
-export async function loginToPos(outletId: string): Promise<PosAuthResult> {
+async function getClerkToken(): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+
     try {
-        // Get Clerk session token dynamically
-        const { useAuth } = await import('@clerk/nextjs');
-
-        // Since this may be called outside React, we need to get the token differently
-        // Use the __clerk_session cookie or localStorage
-        let sessionToken: string | null = null;
-
-        // Try to get from window.__clerk (Clerk's global state)
-        if (typeof window !== 'undefined' && (window as any).__clerk) {
-            const session = await (window as any).__clerk.session;
-            if (session) {
-                sessionToken = await session.getToken();
+        // Method 1: Try Clerk's global state (most reliable)
+        if ((window as any).Clerk?.session) {
+            const token = await (window as any).Clerk.session.getToken();
+            if (token) {
+                console.log('[POS Auth] Got token from Clerk.session');
+                return token;
             }
         }
+
+        // Method 2: Try __clerk_db_jwt from localStorage (Clerk stores it here)
+        const storedToken = localStorage.getItem('__clerk_db_jwt');
+        if (storedToken) {
+            console.log('[POS Auth] Got token from localStorage');
+            return storedToken;
+        }
+
+        // Method 3: Try window.__clerk (older Clerk versions)
+        if ((window as any).__clerk?.session) {
+            const session = await (window as any).__clerk.session;
+            if (session) {
+                const token = await session.getToken();
+                if (token) {
+                    console.log('[POS Auth] Got token from __clerk.session');
+                    return token;
+                }
+            }
+        }
+
+        console.warn('[POS Auth] No Clerk token found');
+        return null;
+    } catch (error) {
+        console.error('[POS Auth] Error getting Clerk token:', error);
+        return null;
+    }
+}
+
+/**
+ * Authenticate with Admin API and get signed POS token
+ * Call this on POS app startup after Clerk login
+ *
+ * @param outletId - The outlet to authenticate for
+ * @param clerkToken - Optional: Pre-fetched Clerk session token (from useAuth hook)
+ */
+export async function loginToPos(outletId: string, clerkToken?: string | null): Promise<PosAuthResult> {
+    try {
+        // Get Clerk session token
+        const sessionToken = clerkToken || await getClerkToken();
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
 
-        // Add session token if available (for cross-origin requests)
+        // Add session token for cross-origin authentication
         if (sessionToken) {
             headers['Authorization'] = `Bearer ${sessionToken}`;
         }
 
+        console.log(`[POS Auth] Authenticating with tracker at ${ADMIN_API_URL}/api/pos/auth`);
+        console.log(`[POS Auth] Has token: ${!!sessionToken}, OutletId: ${outletId}`);
+
         const response = await fetch(`${ADMIN_API_URL}/api/pos/auth`, {
             method: 'POST',
             headers,
-            credentials: 'include', // Still try cookies for same-origin
+            credentials: 'include', // Include cookies for same-origin
             body: JSON.stringify({ outletId }),
         });
 
         if (!response.ok) {
-            const error = await response.json();
+            let error: any = { message: 'Authentication failed' };
+            try {
+                error = await response.json();
+            } catch {
+                error.message = `HTTP ${response.status}: ${response.statusText}`;
+            }
             console.error('[POS Auth] Login failed:', error);
             return {
                 success: false,
@@ -98,7 +140,7 @@ export async function loginToPos(outletId: string): Promise<PosAuthResult> {
         console.error('[POS Auth] Login error:', error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Network error'
+            error: error instanceof Error ? error.message : 'Network error - check if tracker is running'
         };
     }
 }

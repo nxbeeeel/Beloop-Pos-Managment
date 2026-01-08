@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUser, SignOutButton } from "@clerk/nextjs";
+import { useUser, useAuth, SignOutButton } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Home, ShoppingBag, History, Package, Users, ChefHat,
@@ -44,6 +44,7 @@ import { SyncStatus } from "@/components/SyncStatus";
 
 export function POSShell() {
     const { user, isLoaded } = useUser();
+    const { getToken } = useAuth();
     const { outlet, activeStaff, setActiveStaff } = usePOSStore(); // Get outlet from store for shop name
     const [activePanel, setActivePanel] = useState<PanelType>('menu');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -77,8 +78,12 @@ export function POSShell() {
             if (outletId) {
                 console.log("[POS Shell] Starting POS Auth Handshake...");
                 try {
+                    // Get Clerk session token for cross-origin auth
+                    const clerkToken = await getToken();
+                    console.log("[POS Shell] Got Clerk token:", !!clerkToken);
+
                     const { loginToPos } = await import('@/services/pos-auth');
-                    const result = await loginToPos(outletId);
+                    const result = await loginToPos(outletId, clerkToken);
 
                     if (result.success) {
                         console.log("[POS Shell] Auth Success", result);
@@ -107,7 +112,7 @@ export function POSShell() {
         };
 
         initAuth();
-    }, [isLoaded, user, outletId]);
+    }, [isLoaded, user, outletId, getToken]);
 
     // Debug log to trace initialization issues
     useEffect(() => {
