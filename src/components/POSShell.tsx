@@ -63,8 +63,9 @@ export function POSShell() {
             if (!isLoaded || !user) return;
 
             // If already authenticated with valid token, skip
-            const { isAuthenticated } = await import('@/services/pos-auth');
+            const { isAuthenticated, getPosToken } = await import('@/services/pos-auth');
             if (isAuthenticated()) {
+                console.log("[POS Shell] Already authenticated, skipping handshake");
                 setIsAuthenticating(false);
                 return;
             }
@@ -72,14 +73,27 @@ export function POSShell() {
             // Warn if metadata is missing
             if (!tenantId || !outletId) {
                 console.warn("[POS Shell] Missing tenantId or outletId in user metadata. Some panels may be empty.");
+                setIsAuthenticating(false);
+                return;
             }
 
-            // Otherwise, perform login handshake
-            if (outletId) {
-                console.log("[POS Shell] Starting POS Auth Handshake...");
+            // Otherwise, perform login handshake with retry
+            console.log("[POS Shell] Starting POS Auth Handshake...");
+
+            const maxRetries = 3;
+            let lastError = "";
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
                     // Get Clerk session token for cross-origin auth
                     const clerkToken = await getToken();
+
+                    if (!clerkToken && attempt < maxRetries) {
+                        console.log(`[POS Shell] No Clerk token yet, retry ${attempt}/${maxRetries}...`);
+                        await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+                        continue;
+                    }
+
                     console.log("[POS Shell] Got Clerk token:", !!clerkToken);
 
                     const { loginToPos } = await import('@/services/pos-auth');
@@ -87,7 +101,7 @@ export function POSShell() {
 
                     if (result.success) {
                         console.log("[POS Shell] Auth Success", result);
-                        // Save outlet info to store immediately (even if menu is empty)
+                        // Save outlet info to store immediately
                         if (result.outlet) {
                             usePOSStore.setState({
                                 outlet: {
@@ -97,22 +111,38 @@ export function POSShell() {
                                 }
                             });
                         }
+                        setIsAuthenticating(false);
+                        return; // Success, exit retry loop
                     } else {
-                        console.error("[POS Shell] Auth Failed", result.error);
-                        alert("Failed to authenticate with POS server: " + result.error);
+                        lastError = result.error || "Unknown error";
+                        console.warn(`[POS Shell] Auth attempt ${attempt} failed:`, lastError);
+
+                        if (attempt < maxRetries) {
+                            await new Promise(r => setTimeout(r, 1000 * attempt));
+                        }
                     }
                 } catch (err) {
-                    console.error("[POS Shell] Auth Error", err);
+                    lastError = err instanceof Error ? err.message : "Network error";
+                    console.error(`[POS Shell] Auth attempt ${attempt} error:`, err);
+
+                    if (attempt < maxRetries) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt));
+                    }
                 }
-            } else {
-                console.warn("[POS Shell] No outletId found in user metadata");
+            }
+
+            // All retries failed - only show alert if we don't have any token
+            if (!getPosToken()) {
+                console.error("[POS Shell] All auth attempts failed:", lastError);
+                // Don't show alert on every page load - just log it
+                // User can use "Force Retry" button in settings if needed
             }
 
             setIsAuthenticating(false);
         };
 
         initAuth();
-    }, [isLoaded, user, outletId, getToken]);
+    }, [isLoaded, user, outletId, tenantId, getToken]);
 
     // Debug log to trace initialization issues
     useEffect(() => {
