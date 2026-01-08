@@ -1,104 +1,68 @@
 import { api } from '@/lib/api';
 
+/**
+ * POS Extended Service
+ *
+ * All methods use the POS Bearer token authentication via the api interceptor.
+ * The x-tenant-id and x-outlet-id headers are NO LONGER needed as the signed
+ * POS token contains this information.
+ */
+
 export const POSExtendedService = {
     // --- Reports ---
-    getReportStats: async (context: { tenantId: string; outletId: string }, startDate: Date, endDate: Date) => {
+    getReportStats: async (_context: { tenantId: string; outletId: string }, startDate: Date, endDate: Date) => {
         const input = encodeURIComponent(JSON.stringify({
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString()
         }));
-        const response = await api.get(`/api/trpc/pos.getReportStats?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.get(`/api/trpc/pos.getReportStats?input=${input}`);
         return response.data.result.data;
     },
 
-    getReportSalesTrend: async (context: { tenantId: string; outletId: string }, startDate: Date, endDate: Date) => {
+    getReportSalesTrend: async (_context: { tenantId: string; outletId: string }, startDate: Date, endDate: Date) => {
         const input = encodeURIComponent(JSON.stringify({
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString()
         }));
-        const response = await api.get(`/api/trpc/pos.getReportSalesTrend?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.get(`/api/trpc/pos.getReportSalesTrend?input=${input}`);
         return response.data.result.data;
     },
 
-    getReportTopItems: async (context: { tenantId: string; outletId: string }, startDate: Date, endDate: Date) => {
+    getReportTopItems: async (_context: { tenantId: string; outletId: string }, startDate: Date, endDate: Date) => {
         const input = encodeURIComponent(JSON.stringify({
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString()
         }));
-        const response = await api.get(`/api/trpc/pos.getReportTopItems?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.get(`/api/trpc/pos.getReportTopItems?input=${input}`);
         return response.data.result.data;
     },
 
     // --- Customers ---
-    getCustomers: async (context: { tenantId: string; outletId: string }, search?: string) => {
-        const input = encodeURIComponent(JSON.stringify({
-            search
-        }));
-        const response = await api.get(`/api/trpc/pos.getCustomers?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    getCustomers: async (_context: { tenantId: string; outletId: string }, search?: string) => {
+        const input = encodeURIComponent(JSON.stringify({ search }));
+        const response = await api.get(`/api/trpc/pos.getCustomers?input=${input}`);
         return response.data.result.data;
     },
 
-    getCustomerHistory: async (context: { tenantId: string; outletId: string }, customerId: string) => {
-        const input = encodeURIComponent(JSON.stringify({
-            customerId
-        }));
-        const response = await api.get(`/api/trpc/pos.getCustomerHistory?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    getCustomerHistory: async (_context: { tenantId: string; outletId: string }, customerId: string) => {
+        const input = encodeURIComponent(JSON.stringify({ customerId }));
+        const response = await api.get(`/api/trpc/pos.getCustomerHistory?input=${input}`);
         return response.data.result.data;
     },
 
-    createCustomer: async (context: { tenantId: string; outletId: string }, name: string, phoneNumber: string) => {
+    createCustomer: async (_context: { tenantId: string; outletId: string }, name: string, phoneNumber: string) => {
         const payload = { name, phoneNumber };
-        const response = await api.post(`/api/trpc/pos.createCustomer`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.createCustomer`, payload);
         return response.data.result.data;
     },
 
-    // --- Inventory (Using existing stockMove but maybe need product list with stock) ---
-    // We already have getProducts in SyncService, but maybe we need a dedicated one for management if different?
-    // For now, we can reuse getProducts from SyncService or add a wrapper here.
-    getInventory: async (context: { tenantId: string; outletId: string }) => {
-        // Re-using the getProducts endpoint which returns current stock
-        const response = await api.get(`/api/trpc/pos.getProducts`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
-        // API returns { data: products[], outlet: ... }
-        // We need to return just the products array
+    // --- Inventory ---
+    getInventory: async (_context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getProducts`);
         return response.data.result.data.data;
     },
 
-    updateStock: async (context: { tenantId: string; outletId: string }, sku: string, quantity: number, type: 'ADJUSTMENT' | 'PURCHASE' | 'WASTE', notes?: string) => {
+    updateStock: async (_context: { tenantId: string; outletId: string }, sku: string, quantity: number, type: 'ADJUSTMENT' | 'PURCHASE' | 'WASTE', notes?: string) => {
         const payload = {
             sku,
             quantity,
@@ -106,79 +70,43 @@ export const POSExtendedService = {
             referenceId: `POS-${Date.now()}`,
             createdAt: new Date().toISOString()
         };
-        const response = await api.post(`/api/trpc/pos.stockMove`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
-        return response.data; // Fixed type return
+        const response = await api.post(`/api/trpc/pos.stockMove`, payload);
+        return response.data;
     },
 
-    // --- New Features (Orders & Advanced Inventory) ---
-
-    getOrders: async (context: { tenantId: string; outletId: string }, limit = 50, offset = 0) => {
+    // --- Orders ---
+    getOrders: async (_context: { tenantId: string; outletId: string }, limit = 50, offset = 0) => {
         const input = encodeURIComponent(JSON.stringify({ limit, offset }));
-        const response = await api.get(`/api/trpc/pos.getOrders?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.get(`/api/trpc/pos.getOrders?input=${input}`);
         return response.data.result.data;
     },
 
-    submitStockCount: async (context: { tenantId: string; outletId: string }, items: { productId: string; countedQty: number }[], notes?: string) => {
+    submitStockCount: async (_context: { tenantId: string; outletId: string }, items: { productId: string; countedQty: number }[], notes?: string) => {
         const payload = { items, notes };
-        const response = await api.post(`/api/trpc/pos.createStockCount`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.createStockCount`, payload);
         return response.data.result.data;
     },
 
-    createStockOrder: async (context: { tenantId: string; outletId: string }, items: { productId: string; qty: number }[], notes?: string) => {
+    createStockOrder: async (_context: { tenantId: string; outletId: string }, items: { productId: string; qty: number }[], notes?: string) => {
         const payload = { items, notes };
-        const response = await api.post(`/api/trpc/pos.createPurchaseOrder`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.createPurchaseOrder`, payload);
         return response.data.result.data;
     },
 
-    voidOrder: async (context: { tenantId: string; outletId: string }, orderId: string, reason: string) => {
-        const payload = { orderId, reason };
-        const response = await api.post(`/api/trpc/pos.voidOrder`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    voidOrder: async (_context: { tenantId: string; outletId: string }, orderId: string, reason: string, pin?: string) => {
+        const payload = { orderId, reason, pin };
+        const response = await api.post(`/api/trpc/pos.voidOrder`, payload);
         return response.data.result.data;
     },
 
-    getDailyStats: async (context: { tenantId: string; outletId: string }, date: string) => {
+    getDailyStats: async (_context: { tenantId: string; outletId: string }, date: string) => {
         const input = encodeURIComponent(JSON.stringify({ date }));
-        const response = await api.get(`/api/trpc/pos.getDailyStats?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.get(`/api/trpc/pos.getDailyStats?input=${input}`);
         return response.data.result.data;
     },
 
-    submitDailyClose: async (context: { tenantId: string; outletId: string }, data: any) => {
-        const response = await api.post(`/api/trpc/pos.submitDailyClose`, data, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    submitDailyClose: async (_context: { tenantId: string; outletId: string }, data: any) => {
+        const response = await api.post(`/api/trpc/pos.submitDailyClose`, data);
         return response.data.result.data;
     },
 
@@ -186,46 +114,26 @@ export const POSExtendedService = {
     // ENTERPRISE: TABLE MANAGEMENT
     // ============================================
 
-    openTable: async (context: { tenantId: string; outletId: string }, tableNumber: string, customerName?: string) => {
+    openTable: async (_context: { tenantId: string; outletId: string }, tableNumber: string, customerName?: string) => {
         const payload = { tableNumber, customerName };
-        const response = await api.post(`/api/trpc/pos.openTable`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.openTable`, payload);
         return response.data.result.data;
     },
 
-    addItemsToTable: async (context: { tenantId: string; outletId: string }, orderId: string, items: any[]) => {
+    addItemsToTable: async (_context: { tenantId: string; outletId: string }, orderId: string, items: any[]) => {
         const payload = { orderId, items };
-        const response = await api.post(`/api/trpc/pos.addItemsToTable`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.addItemsToTable`, payload);
         return response.data.result.data;
     },
 
-    getOpenTables: async (context: { tenantId: string; outletId: string }) => {
-        const response = await api.get(`/api/trpc/pos.getOpenTables`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    getOpenTables: async (_context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getOpenTables`);
         return response.data.result.data;
     },
 
-    closeTable: async (context: { tenantId: string; outletId: string }, orderId: string, paymentMethod: string, discount?: number) => {
+    closeTable: async (_context: { tenantId: string; outletId: string }, orderId: string, paymentMethod: string, discount?: number) => {
         const payload = { orderId, paymentMethod, discount };
-        const response = await api.post(`/api/trpc/pos.closeTable`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.closeTable`, payload);
         return response.data.result.data;
     },
 
@@ -233,24 +141,14 @@ export const POSExtendedService = {
     // ENTERPRISE: KITCHEN DISPLAY
     // ============================================
 
-    getKitchenOrders: async (context: { tenantId: string; outletId: string }) => {
-        const response = await api.get(`/api/trpc/pos.getKitchenOrders`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    getKitchenOrders: async (_context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getKitchenOrders`);
         return response.data.result.data;
     },
 
-    updateKitchenStatus: async (context: { tenantId: string; outletId: string }, orderId: string, status: 'NEW' | 'PREPARING' | 'READY' | 'SERVED') => {
+    updateKitchenStatus: async (_context: { tenantId: string; outletId: string }, orderId: string, status: 'NEW' | 'PREPARING' | 'READY' | 'SERVED') => {
         const payload = { orderId, status };
-        const response = await api.post(`/api/trpc/pos.updateKitchenStatus`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.updateKitchenStatus`, payload);
         return response.data.result.data;
     },
 
@@ -258,35 +156,20 @@ export const POSExtendedService = {
     // ENTERPRISE: SHIFT MANAGEMENT
     // ============================================
 
-    startShift: async (context: { tenantId: string; outletId: string }, openingCash: number) => {
+    startShift: async (_context: { tenantId: string; outletId: string }, openingCash: number) => {
         const payload = { openingCash };
-        const response = await api.post(`/api/trpc/pos.startShift`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.startShift`, payload);
         return response.data.result.data;
     },
 
-    endShift: async (context: { tenantId: string; outletId: string }, shiftId: string, closingCash: number, notes?: string) => {
+    endShift: async (_context: { tenantId: string; outletId: string }, shiftId: string, closingCash: number, notes?: string) => {
         const payload = { shiftId, closingCash, notes };
-        const response = await api.post(`/api/trpc/pos.endShift`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.endShift`, payload);
         return response.data.result.data;
     },
 
-    getActiveShift: async (context: { tenantId: string; outletId: string }) => {
-        const response = await api.get(`/api/trpc/pos.getActiveShift`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    getActiveShift: async (_context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getActiveShift`);
         return response.data.result.data;
     },
 
@@ -294,35 +177,20 @@ export const POSExtendedService = {
     // ENTERPRISE: HOLD ORDERS
     // ============================================
 
-    holdOrder: async (context: { tenantId: string; outletId: string }, orderId: string, reason?: string) => {
+    holdOrder: async (_context: { tenantId: string; outletId: string }, orderId: string, reason?: string) => {
         const payload = { orderId, reason };
-        const response = await api.post(`/api/trpc/pos.holdOrder`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.holdOrder`, payload);
         return response.data.result.data;
     },
 
-    resumeOrder: async (context: { tenantId: string; outletId: string }, orderId: string) => {
+    resumeOrder: async (_context: { tenantId: string; outletId: string }, orderId: string) => {
         const payload = { orderId };
-        const response = await api.post(`/api/trpc/pos.resumeOrder`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.resumeOrder`, payload);
         return response.data.result.data;
     },
 
-    getHeldOrders: async (context: { tenantId: string; outletId: string }) => {
-        const response = await api.get(`/api/trpc/pos.getHeldOrders`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+    getHeldOrders: async (_context: { tenantId: string; outletId: string }) => {
+        const response = await api.get(`/api/trpc/pos.getHeldOrders`);
         return response.data.result.data;
     },
 
@@ -330,14 +198,9 @@ export const POSExtendedService = {
     // ENTERPRISE: DISCOUNTS
     // ============================================
 
-    validateCoupon: async (context: { tenantId: string; outletId: string }, code: string, orderTotal: number) => {
+    validateCoupon: async (_context: { tenantId: string; outletId: string }, code: string, orderTotal: number) => {
         const payload = { code, orderTotal };
-        const response = await api.post(`/api/trpc/pos.validateCoupon`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.validateCoupon`, payload);
         return response.data.result.data;
     },
 
@@ -345,25 +208,15 @@ export const POSExtendedService = {
     // ENTERPRISE: PAYMENTS (Split Bill)
     // ============================================
 
-    addPayment: async (context: { tenantId: string; outletId: string }, orderId: string, amount: number, method: string, reference?: string) => {
+    addPayment: async (_context: { tenantId: string; outletId: string }, orderId: string, amount: number, method: string, reference?: string) => {
         const payload = { orderId, amount, method, reference };
-        const response = await api.post(`/api/trpc/pos.addPayment`, payload, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.post(`/api/trpc/pos.addPayment`, payload);
         return response.data.result.data;
     },
 
-    getOrderPayments: async (context: { tenantId: string; outletId: string }, orderId: string) => {
+    getOrderPayments: async (_context: { tenantId: string; outletId: string }, orderId: string) => {
         const input = encodeURIComponent(JSON.stringify(orderId));
-        const response = await api.get(`/api/trpc/pos.getOrderPayments?input=${input}`, {
-            headers: {
-                'x-tenant-id': context.tenantId,
-                'x-outlet-id': context.outletId
-            }
-        });
+        const response = await api.get(`/api/trpc/pos.getOrderPayments?input=${input}`);
         return response.data.result.data;
     }
 };
